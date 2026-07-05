@@ -31,11 +31,13 @@ All compute on Modal (profile `staratnyte0`, volume `aigc-ic`, A10G GPUs).
 ## Gap analysis vs UnoChen
 LPIPS −0.031 (1.25 pts) + DISTS −0.014 (0.58) + PSNR +0.48 + MS-SSIM +0.006, at lower bpp. Better model, not better packing. → round-2 training.
 
+| E10 | 07-05 | Weighted-bpp knapsack (board bpp = Σbits/Σpx, verified vs board's 0.0243) → **submission_v4** | local 110.53 @ w-bpp 0.0249 | **board 30.5317 — predicted 30.5317 exactly. Local eval = perfect oracle.** rank 2, gap 1.78 |
+
 ## Queued / running
-- E10: weighted-bpp knapsack (board's bpp definition) → resubmit, free ~+0.1–0.2.
-- E11: round-2 fine-tune λ4: init aigc4_5000, 16k steps, real-800 oversampled 8× (real data = actual 10 challenge generators), λ_lpips 2.0, λ_dists 1.5.
-- E12: FLUX.1-schnell corpus (HF token via Modal secret) → round-3 data.
+- E11: round-2 λ4 fine-tune: init aigc4_5000, 16k steps, real-800 ×8 oversample, λ_lpips 2.0, λ_dists 1.5. Running (ckpt1000: crop-LPIPS 0.101 vs 0.108 round-1).
+- E12: FLUX.1-schnell corpus via HF secret; OOM fixed (≤1152px, VAE tiling). Running.
 - E13: round-2 λ8 after E11.
+- E14: λ2 fine-tune (init ft2, 6k steps, same recipe) — v4 puts 42/100 images on vanilla ft2; upgrading that point has highest EV. Running.
 
 ## Infra gotchas (hard-won)
 - compressai 1.2.8 renamed EntropyBottleneck buffers (`_matrix0`→`matrices.0`); bidirectional remap patched into both loaders.

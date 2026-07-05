@@ -100,6 +100,7 @@ def generate(model_key: str, shard: int = 0, nshards: int = 1, seed: int = 0, sr
     pipe = DiffusionPipeline.from_pretrained(repo, torch_dtype=torch.bfloat16)
     if model_key == "flux":
         pipe.enable_model_cpu_offload()  # ponytail: flux > 24GB, offload on A10G
+        pipe.vae.enable_tiling()
     else:
         pipe.to("cuda")
     pipe.set_progress_bar_config(disable=True)
@@ -110,6 +111,8 @@ def generate(model_key: str, shard: int = 0, nshards: int = 1, seed: int = 0, sr
         if out.exists():
             continue
         w, h = SIZES[idx % len(SIZES)]
+        if model_key == "flux" and max(w, h) > 1152:
+            w, h = min(w, 1152), min(h, 1152)
         if model_key in ("sdxl", "pixart", "sana") and max(w, h) > 1536:
             w, h = w // 2 * 1, h // 2 * 1  # ponytail: non-flux models unreliable at 2K
             w, h = min(w, 1536), min(h, 1536)
@@ -120,6 +123,7 @@ def generate(model_key: str, shard: int = 0, nshards: int = 1, seed: int = 0, sr
             img.save(out)
         except Exception as e:
             print("skip", idx, e)
+            torch.cuda.empty_cache()
         if i % 50 == 0:
             vol.commit()
             print(f"{model_key} shard{shard}: {i}/{len(rows)}")
