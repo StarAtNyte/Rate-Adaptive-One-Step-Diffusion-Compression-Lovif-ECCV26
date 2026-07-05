@@ -1,0 +1,6 @@
+submission_*.zip
+*.log
+__pycache__/
+*.pyc
+.env
+nohup.out
