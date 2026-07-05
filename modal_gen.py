@@ -85,7 +85,8 @@ MODELS = {
 SIZES = [(1024, 1024), (1152, 896), (896, 1152), (2048, 2048), (1536, 1024), (1024, 1536)]
 
 
-@app.function(image=image, volumes={"/data": vol}, gpu="A10G", timeout=86400)
+@app.function(image=image, volumes={"/data": vol}, gpu="A10G", timeout=86400,
+              secrets=[modal.Secret.from_name("huggingface")])
 def generate(model_key: str, shard: int = 0, nshards: int = 1, seed: int = 0, srcs: str = ""):
     import json, pathlib, torch
     repo, steps = MODELS[model_key]
