@@ -35,7 +35,7 @@ LPIPS −0.031 (1.25 pts) + DISTS −0.014 (0.58) + PSNR +0.48 + MS-SSIM +0.006,
 
 | E11 | 07-06 | Round-2 λ4 done (18k steps incl. preempt-restart overshoot): r2_18000 112.18 @ 0.037, r2_12000 112.11 @ 0.0369 | strong high-rate points | keep |
 | E14 | 07-06 | λ2 fine-tune done: r2b_7000 112.77 @ 0.0456 | premium point for small imgs | keep |
-| E15 | 07-06 | 16-run weighted remix → **submission_v5**: local 110.82, board est **30.82** @ w-bpp 0.0249 | r2 ckpts carry 42/100 imgs | pending board confirm |
+| E15 | 07-06 | 16-run weighted remix → **submission_v5**: local 110.82, board est **30.82** @ w-bpp 0.0249 | r2 ckpts carry 42/100 imgs | **board 30.8172 confirmed — third exact prediction.** rank 2, gap 1.49 |
 
 ## Queued / running
 - E12: FLUX dead on A10G (12B transformer > 22GB even offloaded) — replaced with SD3.5-medium; corpus complete (3938 sd35 + 3938 sdxl + pixart + sana).
