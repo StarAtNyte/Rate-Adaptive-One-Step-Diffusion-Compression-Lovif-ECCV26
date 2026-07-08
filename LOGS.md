@@ -33,11 +33,14 @@ LPIPS −0.031 (1.25 pts) + DISTS −0.014 (0.58) + PSNR +0.48 + MS-SSIM +0.006,
 
 | E10 | 07-05 | Weighted-bpp knapsack (board bpp = Σbits/Σpx, verified vs board's 0.0243) → **submission_v4** | local 110.53 @ w-bpp 0.0249 | **board 30.5317 — predicted 30.5317 exactly. Local eval = perfect oracle.** rank 2, gap 1.78 |
 
+| E11 | 07-06 | Round-2 λ4 done (18k steps incl. preempt-restart overshoot): r2_18000 112.18 @ 0.037, r2_12000 112.11 @ 0.0369 | strong high-rate points | keep |
+| E14 | 07-06 | λ2 fine-tune done: r2b_7000 112.77 @ 0.0456 | premium point for small imgs | keep |
+| E15 | 07-06 | 16-run weighted remix → **submission_v5**: local 110.82, board est **30.82** @ w-bpp 0.0249 | r2 ckpts carry 42/100 imgs | pending board confirm |
+
 ## Queued / running
-- E11: round-2 λ4 fine-tune: init aigc4_5000, 16k steps, real-800 ×8 oversample, λ_lpips 2.0, λ_dists 1.5. Running (ckpt1000: crop-LPIPS 0.101 vs 0.108 round-1).
-- E12: FLUX.1-schnell corpus via HF secret; OOM fixed (≤1152px, VAE tiling). Running.
-- E13: round-2 λ8 after E11.
-- E14: λ2 fine-tune (init ft2, 6k steps, same recipe) — v4 puts 42/100 images on vanilla ft2; upgrading that point has highest EV. Running.
+- E12: FLUX dead on A10G (12B transformer > 22GB even offloaded) — replaced with SD3.5-medium; corpus complete (3938 sd35 + 3938 sdxl + pixart + sana).
+- E13: round-2 λ8 (init aigc8_5000, sd35-augmented corpus) — next GPU run.
+- E16: round-3 λ4 on sd35+sdxl-augmented corpus — after E13.
 
 ## Infra gotchas (hard-won)
 - compressai 1.2.8 renamed EntropyBottleneck buffers (`_matrix0`→`matrices.0`); bidirectional remap patched into both loaders.

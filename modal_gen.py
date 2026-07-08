@@ -80,6 +80,7 @@ MODELS = {
     "sdxl": ("stabilityai/stable-diffusion-xl-base-1.0", 30),
     "pixart": ("PixArt-alpha/PixArt-Sigma-XL-2-1024-MS", 20),
     "sana": ("Efficient-Large-Model/Sana_1600M_1024px_diffusers", 20),
+    "sd35": ("stabilityai/stable-diffusion-3.5-medium", 28),
 }
 # ponytail: fixed aspect cycle instead of per-image sampling
 SIZES = [(1024, 1024), (1152, 896), (896, 1152), (2048, 2048), (1536, 1024), (1024, 1536)]
@@ -98,7 +99,7 @@ def generate(model_key: str, shard: int = 0, nshards: int = 1, seed: int = 0, sr
 
     from diffusers import DiffusionPipeline
     pipe = DiffusionPipeline.from_pretrained(repo, torch_dtype=torch.bfloat16)
-    if model_key == "flux":
+    if model_key in ("flux", "sd35"):
         pipe.enable_model_cpu_offload()  # ponytail: flux > 24GB, offload on A10G
         pipe.vae.enable_tiling()
     else:
@@ -111,7 +112,7 @@ def generate(model_key: str, shard: int = 0, nshards: int = 1, seed: int = 0, sr
         if out.exists():
             continue
         w, h = SIZES[idx % len(SIZES)]
-        if model_key == "flux" and max(w, h) > 1152:
+        if model_key in ("flux", "sd35") and max(w, h) > 1152:
             w, h = min(w, 1152), min(h, 1152)
         if model_key in ("sdxl", "pixart", "sana") and max(w, h) > 1536:
             w, h = w // 2 * 1, h // 2 * 1  # ponytail: non-flux models unreliable at 2K
