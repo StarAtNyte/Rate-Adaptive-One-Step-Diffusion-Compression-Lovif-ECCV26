@@ -211,8 +211,17 @@ CKPT_PATHS = {
     "AEIC_ME_ft4": f"{W}/aeic_ckpts/AEIC_ME_ft4.pkl",
     "AEIC_ME_ft8": f"{W}/aeic_ckpts/AEIC_ME_ft8.pkl",
     "aigc4_2000": "/data/ft_out/checkpoints/AEIC_ME_aigc4_2000.pkl",
+    "aigc4_3000": "/data/ft_out/checkpoints/AEIC_ME_aigc4_3000.pkl",
+    "aigc4_4000": "/data/ft_out/checkpoints/AEIC_ME_aigc4_4000.pkl",
     "aigc4_5000": "/data/ft_out/checkpoints/AEIC_ME_aigc4_5000.pkl",
+    "r2_18000": "/data/ft_out/checkpoints/AEIC_r2_4_18000.pkl",
+    "r2_2000": "/data/ft_out/checkpoints/AEIC_r2_4_2000.pkl",
+    "r2_12000": "/data/ft_out/checkpoints/AEIC_r2_4_12000.pkl",
+    "r2b_6000": "/data/ft_out/checkpoints/AEIC_r2b_2_6000.pkl",
+    "r2b_7000": "/data/ft_out/checkpoints/AEIC_r2b_2_7000.pkl",
     "aigc8_2000": "/data/ft_out/checkpoints/AEIC_ME_aigc88_2000.pkl",
+    "aigc8_3000": "/data/ft_out/checkpoints/AEIC_ME_aigc88_3000.pkl",
+    "aigc8_4000": "/data/ft_out/checkpoints/AEIC_ME_aigc88_4000.pkl",
     "aigc8_5000": "/data/ft_out/checkpoints/AEIC_ME_aigc88_5000.pkl",
 }
 
@@ -233,7 +242,8 @@ def refine(plan_json: str, split: str = "val", iters: int = 60, only_tag: str = 
         files = files[shard::nshards]
         if not files:
             continue
-        r = subprocess.run([
+        import time as _time
+        r = subprocess.Popen([
             sys.executable, "/aeic/src/refine.py",
             f"--sd_path={W}/sd-turbo",
             f"--codec_path={CKPT_PATHS[tag]}",
@@ -244,6 +254,9 @@ def refine(plan_json: str, split: str = "val", iters: int = 60, only_tag: str = 
             f"--iters={iters}",
             f"--lr={lr}",
         ], cwd="/aeic/src")
+        while r.poll() is None:
+            _time.sleep(60)
+            vol.commit()  # persist across preemptions
         vol.commit()
         if r.returncode != 0:
             raise RuntimeError(f"refine failed for {tag}")

@@ -59,6 +59,43 @@ def forward_ste(codec, y, x_pad):
     return y_hat, bpp
 
 
+def get_frozen(codec, y, x_pad):
+    """Precompute detached conditioning (means/scales/z-rate) from initial y."""
+    y_h, y_w = x_pad.shape[2] // 32, x_pad.shape[3] // 32
+    z_h, z_w = math.ceil(y_h / 4), math.ceil(y_w / 4)
+    pad_h, pad_w = z_h * 4 - y_h, z_w * 4 - y_w
+    y_padded = F.pad(y, pad=(0, pad_w, 0, pad_h), mode='constant')
+    z = codec.h_a(y_padded)
+    _, qz_lik = codec.entropy_bottleneck(z, training=False)
+    z_offset = codec.entropy_bottleneck._get_medians()
+    z_hat = torch.round(z - z_offset) + z_offset
+    B, C, H, W = y.shape
+    masks = codec.get_mask_four_parts(B, C, H, W, device=y.device)
+    base = codec.h_s(z_hat)[:, :, 0:y_h, 0:y_w]
+    scales_sum, means_sum = 0, 0
+    for i in range(4):
+        mask = masks[i]
+        means_supp, scales_supp = codec.adapter_out[i](codec.g_c(codec.adapter_in[i](base))).chunk(2, 1)
+        means = means_supp * mask
+        scales = scales_supp * mask
+        y_hat_i = torch.round(y * mask - means) + means
+        base = base * (1 - mask) + y_hat_i
+        scales_sum = scales_sum + scales
+        means_sum = means_sum + means
+    num_pixels = x_pad.shape[2] * x_pad.shape[3]
+    z_bpp = torch.log(qz_lik).sum() / (-math.log(2) * num_pixels)
+    return dict(means=means_sum.detach(), scales=scales_sum.detach(),
+                z_bpp=z_bpp.detach(), num_pixels=num_pixels)
+
+
+def forward_frozen(codec, y, frozen):
+    """Differentiable w.r.t. y only; conditioning frozen."""
+    y_hat = ste_round(y - frozen["means"]) + frozen["means"]
+    _, qy_lik = codec.gaussian_conditional(y, frozen["scales"], frozen["means"], training=False)
+    bpp = torch.log(qy_lik).sum() / (-math.log(2) * frozen["num_pixels"]) + frozen["z_bpp"]
+    return y_hat, bpp
+
+
 def unet_fwd(net, x):
     # grad-enabled single-tile unet (refine crops/images are decoded whole when they fit;
     # large latents fall back to net.unet directly - memory permitting)
@@ -127,6 +164,9 @@ def main():
     for img_path in args.img_list.split(","):
         t0 = time.time()
         name = os.path.splitext(os.path.basename(img_path))[0]
+        if os.path.exists(os.path.join(args.rec_path, name + ".png")) and os.path.exists(os.path.join(args.bin_path, name)):
+            print("[skip existing]", name, flush=True)
+            continue
         img = tf(Image.open(img_path).convert("RGB")).cuda().unsqueeze(0)
         ori_h, ori_w = img.shape[2:]
         pad_h = math.ceil(ori_h / 64) * 64 - ori_h
@@ -135,7 +175,8 @@ def main():
 
         with torch.no_grad():
             y0 = net.codec.g_a(x)
-            _, bpp0 = forward_ste(net.codec, y0, x)
+            frozen = get_frozen(net.codec, y0, x)
+            _, bpp0 = forward_frozen(net.codec, y0, frozen)
         y = y0.clone().requires_grad_(True)
         opt = torch.optim.Adam([y], lr=args.lr)
 
@@ -147,7 +188,7 @@ def main():
 
         for it in range(args.iters):
           if True:
-            y_hat, bpp = forward_ste(net.codec, y, x)
+            y_hat, bpp = forward_frozen(net.codec, y, frozen)
             a = rng.randint(0, max(0, yH - LY)) if yH > LY else 0
             b = rng.randint(0, max(0, yW - LY)) if yW > LY else 0
             a0, a1 = max(0, a - M), min(yH, a + LY + M)

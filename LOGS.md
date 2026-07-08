@@ -37,10 +37,16 @@ LPIPS −0.031 (1.25 pts) + DISTS −0.014 (0.58) + PSNR +0.48 + MS-SSIM +0.006,
 | E14 | 07-06 | λ2 fine-tune done: r2b_7000 112.77 @ 0.0456 | premium point for small imgs | keep |
 | E15 | 07-06 | 16-run weighted remix → **submission_v5**: local 110.82, board est **30.82** @ w-bpp 0.0249 | r2 ckpts carry 42/100 imgs | **board 30.8172 confirmed — third exact prediction.** rank 2, gap 1.49 |
 
+| E13 | 07-08 | Round-2 λ8 on sd35-augmented corpus (8k steps): r3l8_8000 110.15 @ 0.0259 | +0.35 above curve | keep |
+| E18 | 07-09 | Latent TTO FIXED — frozen-conditioning gradients (means/scales detached from init pass): stable bpp, +0.32/img mean; all 100 val refined at v5-chosen ckpts | refined set 110.91 @ 0.0311 | works |
+| E19 | 07-09 | Grand remix (16 base + r3l8 + refined) → **submission_v6**: local 111.07, board est **31.07** @ w-bpp 0.0249; refined carries 66/100 | pending board |
+
 ## Queued / running
 - E12: FLUX dead on A10G (12B transformer > 22GB even offloaded) — replaced with SD3.5-medium; corpus complete (3938 sd35 + 3938 sdxl + pixart + sana).
 - E13: round-2 λ8 (init aigc8_5000, sd35-augmented corpus) — next GPU run.
-- E16: round-3 λ4 on sd35+sdxl-augmented corpus — after E13.
+- E16: round-3 λ4 on sd35+sdxl-augmented corpus.
+- E17: decoder-side enhancer (train pairs: r2_18000_train + aigc8_5000_train recon of train-800) — pairs ready, trainer TBD.
+- E20: TTO round on refined-selection loop (refine against v6 plan incl. r3l8 picks).
 
 ## Infra gotchas (hard-won)
 - compressai 1.2.8 renamed EntropyBottleneck buffers (`_matrix0`→`matrices.0`); bidirectional remap patched into both loaders.
