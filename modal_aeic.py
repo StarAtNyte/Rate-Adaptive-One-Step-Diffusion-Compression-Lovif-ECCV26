@@ -232,13 +232,19 @@ CKPT_PATHS = {
 
 
 @app.function(image=image, volumes={"/data": vol}, gpu=GPU, timeout=43200)
-def refine(plan_json: str, split: str = "val", iters: int = 60, only_tag: str = "", shard: int = 0, nshards: int = 1, lr: float = 1e-3, out_dir: str = "refined"):
+def refine(plan_json: str, split: str = "val", iters: int = 60, only_tag: str = "", shard: int = 0, nshards: int = 1, lr: float = 1e-3, out_dir: str = "refined",
+           text_boxes_path: str = "", text_bias: float = 0.7, text_dists_w: float = 3.0, only_with_text: bool = False):
     """Run latent TTO per image with the checkpoint chosen by the knapsack plan."""
     import json, pathlib, subprocess, sys
     plan = json.loads(plan_json)
     gt = {p.name: str(p) for p in pathlib.Path(f"/data/{split}").rglob("*.png")}
+    text_boxes = {}
+    if text_boxes_path:
+        text_boxes = json.loads(pathlib.Path(text_boxes_path).read_text())
     by_tag = {}
     for name, tag in sorted(plan.items()):
+        if only_with_text and not text_boxes.get(name):
+            continue
         by_tag.setdefault(tag, []).append(gt[name])
     out_root = f"/data/runs/{split}/{out_dir}"
     for tag, files in by_tag.items():
@@ -248,7 +254,7 @@ def refine(plan_json: str, split: str = "val", iters: int = 60, only_tag: str = 
         if not files:
             continue
         import time as _time
-        r = subprocess.Popen([
+        cmd = [
             sys.executable, "/aeic/src/refine.py",
             f"--sd_path={W}/sd-turbo",
             f"--codec_path={CKPT_PATHS[tag]}",
@@ -258,7 +264,10 @@ def refine(plan_json: str, split: str = "val", iters: int = 60, only_tag: str = 
             f"--bin_path={out_root}/bin",
             f"--iters={iters}",
             f"--lr={lr}",
-        ], cwd="/aeic/src")
+        ]
+        if text_boxes_path:
+            cmd += [f"--text_boxes_json={text_boxes_path}", f"--text_bias={text_bias}", f"--text_dists_w={text_dists_w}"]
+        r = subprocess.Popen(cmd, cwd="/aeic/src")
         while r.poll() is None:
             _time.sleep(60)
             vol.commit()  # persist across preemptions
@@ -357,3 +366,36 @@ def text_diagnostic(plan_json: str, split: str = "val", pad: int = 8):
     out.write_text(json.dumps(rows, indent=1))
     vol.commit()
     return str(out)
+
+
+@app.function(image=diag_image, volumes={"/data": vol}, gpu="A10G", timeout=1800)
+def ocr_boxes(split: str = "val", pad: int = 8):
+    """Detect text boxes on every GT image, save {name: [[x0,y0,x1,y1],...]} for reuse."""
+    import json, pathlib, easyocr, numpy as np
+    from PIL import Image
+
+    reader = easyocr.Reader(["en"], gpu=True)
+    out = {}
+    for p in sorted(pathlib.Path(f"/data/{split}").rglob("*.png")):
+        img = np.array(Image.open(p).convert("RGB"))
+        H, W = img.shape[:2]
+        boxes = reader.readtext(img, detail=1, paragraph=False)
+        kept = []
+        for bbox, txt, conf in boxes:
+            if conf < 0.3 or not txt.strip():
+                continue
+            xs = [pt[0] for pt in bbox]; ys = [pt[1] for pt in bbox]
+            x0, x1 = max(0, int(min(xs)) - pad), min(W, int(max(xs)) + pad)
+            y0, y1 = max(0, int(min(ys)) - pad), min(H, int(max(ys)) + pad)
+            if x1 - x0 < 32:
+                cx = (x0 + x1) // 2; x0, x1 = max(0, cx - 16), min(W, cx + 16)
+            if y1 - y0 < 32:
+                cy = (y0 + y1) // 2; y0, y1 = max(0, cy - 16), min(H, cy + 16)
+            if x1 - x0 >= 32 and y1 - y0 >= 32:
+                kept.append([x0, y0, x1, y1])
+        out[p.name] = kept
+        print(p.name, len(kept), flush=True)
+    dest = pathlib.Path(f"/data/{split}_text_boxes.json")
+    dest.write_text(json.dumps(out, indent=1))
+    vol.commit()
+    return str(dest)

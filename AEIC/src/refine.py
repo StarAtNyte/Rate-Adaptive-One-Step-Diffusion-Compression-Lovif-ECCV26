@@ -145,7 +145,15 @@ def main():
     ap.add_argument("--latent_tiled_size", type=int, default=96)
     ap.add_argument("--latent_tiled_overlap", type=int, default=32)
     ap.add_argument("--use_practical_entropy_coding", default=True, action="store_true")
+    ap.add_argument("--text_boxes_json", default="", help="path to {name: [[x0,y0,x1,y1],...]} pixel-coord boxes")
+    ap.add_argument("--text_bias", type=float, default=0.7, help="fraction of iters that sample a text-box crop when available")
+    ap.add_argument("--text_dists_w", type=float, default=3.0, help="extra DISTS weight multiplier on text crops")
     args = ap.parse_args()
+
+    text_boxes_all = {}
+    if args.text_boxes_json:
+        import json as _json
+        text_boxes_all = _json.loads(open(args.text_boxes_json).read())
 
     net = AEIC(sd_path=args.sd_path, args=args)
     net.cuda().eval()
@@ -185,12 +193,20 @@ def main():
         yH, yW = y0.shape[2:]
         LY = min(16, yH, yW)   # 16 latent px = 512 pixel crop
         M = 2                  # decode margin in y-latent px
+        img_boxes = text_boxes_all.get(name + ".png", []) or text_boxes_all.get(name, [])
 
         for it in range(args.iters):
           if True:
             y_hat, bpp = forward_frozen(net.codec, y, frozen)
-            a = rng.randint(0, max(0, yH - LY)) if yH > LY else 0
-            b = rng.randint(0, max(0, yW - LY)) if yW > LY else 0
+            is_text_iter = bool(img_boxes) and rng.random() < args.text_bias
+            if is_text_iter:
+                bx0, by0, bx1, by1 = img_boxes[rng.randrange(len(img_boxes))]
+                bca, bcb = (by0 + by1) // 64, (bx0 + bx1) // 64  # px center -> latent idx (//32) then centered
+                a = max(0, min(yH - LY, bca - LY // 2))
+                b = max(0, min(yW - LY, bcb - LY // 2))
+            else:
+                a = rng.randint(0, max(0, yH - LY)) if yH > LY else 0
+                b = rng.randint(0, max(0, yW - LY)) if yW > LY else 0
             a0, a1 = max(0, a - M), min(yH, a + LY + M)
             b0, b1 = max(0, b - M), min(yW, b + LY + M)
             if (a1 - a0) % 2:
@@ -212,8 +228,9 @@ def main():
             mse = F.mse_loss(xh01, x01)
             lp = lpips_loss(xc_hat, xc).mean()
             dt = dists_loss(xh01, x01).mean()
+            dt_w = 40 * (args.text_dists_w if is_text_iter else 1.0)
             rate_pen = F.relu(bpp - bpp0.detach())
-            loss = args.mse_w * mse + 40 * lp + 40 * dt + args.rate_w * rate_pen
+            loss = args.mse_w * mse + 40 * lp + dt_w * dt + args.rate_w * rate_pen
           if True:
             opt.zero_grad()
             loss.backward()

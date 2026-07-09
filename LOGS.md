@@ -40,6 +40,9 @@ All compute on Modal (profile `staratnyte0`, volume `aigc-ic`, A10G GPUs). Repo:
 3. yingliang 26.91
 - "anish 40.83" = fake (jumped from −5.45 overnight; PSNR 33 + DISTS 0.0155 @ 0.021 bpp is beyond SOTA in both axes simultaneously; val GT is public and dev server never verifies bitstream→reconstruction). Dies in final phase (decoder verified, human eval).
 
+| E23 | 07-09 | OCR text diagnostic (EasyOCR boxes on val GT, crop-metric vs whole-image on v7 recon) | 52/100 imgs have text. **LPIPS text −0.022 (better!), DISTS text +0.0717 (much worse)** | DISTS is the real text weak point, not LPIPS — targeted fix |
+| E24 | 07-09 | TTO extended: OCR-biased crop sampling (70% of iters center on a text box) + 3x DISTS weight on text-region iters | queued | targets the E23 finding directly |
+
 ## Queued / running
 - E16: round-3 λ4 "r3l4" (init r2_18000, sd35+sdxl-augmented corpus, 8k steps) — launched 07-09.
 - E20: TTO pass for v6's r3l8_8000 picks (18 imgs) → separate out_dir `refined2` (skip-guard collision with v5-refined dir). Relaunch pending.
