@@ -41,7 +41,8 @@ All compute on Modal (profile `staratnyte0`, volume `aigc-ic`, A10G GPUs). Repo:
 - "anish 40.83" = fake (jumped from −5.45 overnight; PSNR 33 + DISTS 0.0155 @ 0.021 bpp is beyond SOTA in both axes simultaneously; val GT is public and dev server never verifies bitstream→reconstruction). Dies in final phase (decoder verified, human eval).
 
 | E23 | 07-09 | OCR text diagnostic (EasyOCR boxes on val GT, crop-metric vs whole-image on v7 recon) | 52/100 imgs have text. **LPIPS text −0.022 (better!), DISTS text +0.0717 (much worse)** | DISTS is the real text weak point, not LPIPS — targeted fix |
-| E24 | 07-09 | TTO extended: OCR-biased crop sampling (70% of iters center on a text box) + 3x DISTS weight on text-region iters | queued | targets the E23 finding directly |
+| E24 | 07-09 | TTO with OCR-biased crop sampling (70% iters center on text box) + 3x DISTS weight on text iters, 52 affected images, 100 iters | huge per-image gain: mean Δscore +1.61 vs plain TTO, 44/52 improved (up to +6.76 on one image) — but bpp also rose ~0.005-0.03 on the big winners | works, but costly in bits |
+| E25 | 07-09 | 18-way remix incl. refined_text → **v8** | local 111.096 @ w-bpp 0.0249 | board est **31.0962** (+0.02 over v7) — real but small; existing r3l8/r3l4/refined candidates already captured most of the raw gain under budget, only 9/52 text images win the global slot |
 
 ## Queued / running
 - E16: round-3 λ4 "r3l4" (init r2_18000, sd35+sdxl-augmented corpus, 8k steps) — launched 07-09.
