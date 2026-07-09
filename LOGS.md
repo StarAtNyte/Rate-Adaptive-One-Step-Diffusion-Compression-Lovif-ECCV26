@@ -30,6 +30,9 @@ All compute on Modal (profile `staratnyte0`, volume `aigc-ic`, A10G GPUs). Repo:
 | E15 | 07-06 | 16-run weighted remix → **v5** | 110.82 @ w-bpp 0.0249 | board **30.8172** — exact prediction #3 |
 | E18 | 07-09 | Latent TTO **fixed**: freeze conditioning (means/scales detached from init pass), gradients only through decode path | stable bpp; +0.32/img mean; all 100 val refined at v5-chosen ckpts → refined set 110.91 @ 0.0311 | works; +0.49 on winning images |
 | E19 | 07-09 | Grand remix (16 base + r3l8 + refined; refined carries 66/100) → **v6** | 111.07 @ w-bpp 0.0249 | board **31.0684** — exact prediction #4. rank 2, gap to UnoChen 1.24 |
+| E21 | 07-09 | Tiling-seam ablation on r2_18000 (vae_tile 160→224, latent_tile 96→128, overlap 32→48) | 112.1792 @ 0.037 vs baseline 112.18 @ 0.037 — **no effect** | ruled out, zero-cost test |
+| E16 | 07-09 | Round-3 λ4 "r3l4" (init r2_18000, sd35+sdxl-augmented corpus, 8k steps) done | r3l4_8000: 112.22 @ 0.0373 | marginal (+0.04 vs r2_18000) |
+| E22 | 07-09 | 18-run remix incl. r3l4_8000 → **v7** | 111.0739 @ w-bpp 0.0249 | board est **31.0739** (+0.006 over v6, near-noise) |
 
 ## Leaderboard 2026-07-09 (honest entries)
 1. UnoChen 32.3084 (PSNR 27.21, LPIPS 0.065, DISTS 0.036 @ 0.0222, 2.2s)

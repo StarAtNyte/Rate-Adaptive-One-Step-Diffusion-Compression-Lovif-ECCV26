@@ -45,7 +45,8 @@ def fetch_weights():
 
 
 @app.function(image=image, volumes={"/data": vol}, gpu=GPU, timeout=14400)
-def compress(ckpt: str, codec_type: str = "AEIC-ME", split: str = "val", tag: str = ""):
+def compress(ckpt: str, codec_type: str = "AEIC-ME", split: str = "val", tag: str = "",
+             vae_tile: int = 160, latent_tile: int = 96, latent_overlap: int = 32):
     import subprocess, pathlib, sys
     tag = tag or pathlib.Path(ckpt).stem
     out = f"/data/runs/{split}/{tag}"
@@ -61,6 +62,9 @@ def compress(ckpt: str, codec_type: str = "AEIC-ME", split: str = "val", tag: st
         "--codec_path=" + (ckpt if ckpt.startswith("/") else f"{W}/aeic_ckpts/{ckpt}"),
         f"--vae_decoder_path={W}/adcsr/weight/pretrained/halfDecoder.ckpt",
         "--use_practical_entropy_coding",
+        f"--vae_decoder_tiled_size={vae_tile}",
+        f"--latent_tiled_size={latent_tile}",
+        f"--latent_tiled_overlap={latent_overlap}",
     ], cwd="/aeic/src", capture_output=True, text=True)
     vol.commit()
     if r.returncode != 0:
