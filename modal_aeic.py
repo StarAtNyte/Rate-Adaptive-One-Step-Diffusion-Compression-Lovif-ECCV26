@@ -50,8 +50,13 @@ def compress(ckpt: str, codec_type: str = "AEIC-ME", split: str = "val", tag: st
     import subprocess, pathlib, sys
     tag = tag or pathlib.Path(ckpt).stem
     out = f"/data/runs/{split}/{tag}"
-    img_dirs = list(pathlib.Path(f"/data/{split}").rglob("*.png"))
-    img_dir = str(img_dirs[0].parent)  # assume flat after check
+    img_dirs = [p for p in pathlib.Path(f"/data/{split}").rglob("*.png") if "__MACOSX" not in p.parts]
+    if not img_dirs:
+        raise RuntimeError(f"no images found under /data/{split}")
+    dir_counts = {}
+    for p in img_dirs:
+        dir_counts[p.parent] = dir_counts.get(p.parent, 0) + 1
+    img_dir = str(max(dir_counts, key=dir_counts.get))  # dir with the most images
     r = subprocess.run([
         sys.executable, "/aeic/src/compress.py",
         f"--sd_path={W}/sd-turbo",
