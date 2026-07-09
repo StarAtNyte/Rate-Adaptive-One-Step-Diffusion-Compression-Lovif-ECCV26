@@ -44,7 +44,8 @@ All compute on Modal (profile `staratnyte0`, volume `aigc-ic`, A10G GPUs). Repo:
 | E24 | 07-09 | TTO with OCR-biased crop sampling (70% iters center on text box) + 3x DISTS weight on text iters, 52 affected images, 100 iters | huge per-image gain: mean Δscore +1.61 vs plain TTO, 44/52 improved (up to +6.76 on one image) — but bpp also rose ~0.005-0.03 on the big winners | works, but costly in bits |
 | E25 | 07-09 | 18-way remix incl. refined_text → **v8** | local 111.096 @ w-bpp 0.0249 | board est **31.0962** (+0.02 over v7) — real but small; existing r3l8/r3l4/refined candidates already captured most of the raw gain under budget, only 9/52 text images win the global slot |
 
-| E26 | 07-09 | E17 decoder-side enhancer: fixed __MACOSX bug blocking train-recon pairs; regenerated 1814 (recon,GT) pairs from train-800 across 3 checkpoints; lightweight residual CNN (8 RRDB blocks, ~1.5M params, zero-init tail), L1+LPIPS+DISTS loss, 8k steps | ckpt1000 sanity test: +0.056 score, zero bpp cost (post-decode, doesn't touch bitstream) — near-identity this early, training continues | in progress |
+| E26 | 07-09/10 | E17 decoder-side enhancer: 1814 pairs, 8 RRDB residual CNN (~1.5M params), L1+LPIPS+DISTS loss, 8k steps to convergence | +0.22 avg score gain, UNIFORM across every candidate type (0.19-0.25 range), zero bpp cost (post-decode) | ships in final decoder, stacks with everything |
+| E27 | 07-10 | Grand remix with all enhanced candidates → **v9** | local 111.286 @ w-bpp 0.0249 | board est **31.2863** (+0.19 over v8) |
 
 ## Queued / running
 - E16: round-3 λ4 "r3l4" (init r2_18000, sd35+sdxl-augmented corpus, 8k steps) — launched 07-09.
