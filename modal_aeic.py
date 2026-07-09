@@ -228,6 +228,7 @@ CKPT_PATHS = {
     "aigc8_3000": "/data/ft_out/checkpoints/AEIC_ME_aigc88_3000.pkl",
     "aigc8_4000": "/data/ft_out/checkpoints/AEIC_ME_aigc88_4000.pkl",
     "aigc8_5000": "/data/ft_out/checkpoints/AEIC_ME_aigc88_5000.pkl",
+    "r3l4_8000": "/data/ft_out/checkpoints/AEIC_r3l4_4_8000.pkl",
 }
 
 
