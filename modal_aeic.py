@@ -266,3 +266,94 @@ def refine(plan_json: str, split: str = "val", iters: int = 60, only_tag: str = 
         if r.returncode != 0:
             raise RuntimeError(f"refine failed for {tag}")
     return out_root
+
+
+diag_image = (
+    modal.Image.debian_slim(python_version="3.10")
+    .apt_install("libgl1", "libglib2.0-0")
+    .pip_install("torch==2.1.2", "torchvision==0.16.2", extra_index_url="https://download.pytorch.org/whl/cu121")
+    .pip_install("easyocr", "pyiqa", "pillow", "numpy<2", "opencv-python-headless")
+)
+
+
+@app.function(image=diag_image, volumes={"/data": vol}, gpu="A10G", timeout=3600)
+def text_diagnostic(plan_json: str, split: str = "val", pad: int = 8):
+    """OCR-detect text regions on GT, compare text-crop vs whole-image LPIPS/DISTS
+    between GT and the plan's chosen reconstruction, to test if text drags down score."""
+    import json, pathlib, easyocr, numpy as np, torch, pyiqa
+    from PIL import Image
+
+    plan = json.loads(plan_json)
+    reader = easyocr.Reader(["en"], gpu=True)
+    dev = "cuda"
+    lpips_m = pyiqa.create_metric("lpips", device=dev)
+    dists_m = pyiqa.create_metric("dists", device=dev)
+
+    gt_dir = {p.name: p for p in pathlib.Path(f"/data/{split}").rglob("*.png")}
+    rows = []
+    for name, tag in sorted(plan.items()):
+        gt_path = gt_dir[name]
+        rec_path = pathlib.Path(f"/data/runs/{split}/{tag}/rec/{name}")
+        if not rec_path.exists():
+            continue
+        gt_img = Image.open(gt_path).convert("RGB")
+        rec_img = Image.open(rec_path).convert("RGB")
+        gt_np = np.array(gt_img)
+        H, W = gt_np.shape[:2]
+
+        boxes = reader.readtext(gt_np, detail=1, paragraph=False)
+        text_boxes = []
+        for bbox, txt, conf in boxes:
+            if conf < 0.3 or not txt.strip():
+                continue
+            xs = [p[0] for p in bbox]; ys = [p[1] for p in bbox]
+            x0, x1 = max(0, int(min(xs)) - pad), min(W, int(max(xs)) + pad)
+            y0, y1 = max(0, int(min(ys)) - pad), min(H, int(max(ys)) + pad)
+            if x1 - x0 < 32:
+                cx = (x0 + x1) // 2
+                x0, x1 = max(0, cx - 16), min(W, cx + 16)
+            if y1 - y0 < 32:
+                cy = (y0 + y1) // 2
+                y0, y1 = max(0, cy - 16), min(H, cy + 16)
+            if x1 - x0 < 32 or y1 - y0 < 32:
+                continue
+            text_boxes.append((x0, y0, x1, y1))
+
+        def to_t(img):
+            return torch.from_numpy(np.array(img)).permute(2, 0, 1)[None].float().div(255).to(dev)
+
+        whole_lpips = lpips_m(to_t(rec_img), to_t(gt_img)).item()
+        whole_dists = dists_m(to_t(rec_img), to_t(gt_img)).item()
+
+        text_lpips = text_dists = None
+        if text_boxes:
+            tl, td, area = 0.0, 0.0, 0
+            for x0, y0, x1, y1 in text_boxes:
+                gt_c = gt_img.crop((x0, y0, x1, y1))
+                rec_c = rec_img.crop((x0, y0, x1, y1))
+                w = (x1 - x0) * (y1 - y0)
+                tl += lpips_m(to_t(rec_c), to_t(gt_c)).item() * w
+                td += dists_m(to_t(rec_c), to_t(gt_c)).item() * w
+                area += w
+            text_lpips, text_dists = tl / area, td / area
+
+        rows.append(dict(name=name, tag=tag, n_text_boxes=len(text_boxes),
+                          whole_lpips=whole_lpips, whole_dists=whole_dists,
+                          text_lpips=text_lpips, text_dists=text_dists))
+        print(name, "boxes:", len(text_boxes), "whole_lpips:", round(whole_lpips, 4),
+              "text_lpips:", round(text_lpips, 4) if text_lpips else None, flush=True)
+
+    with_text = [r for r in rows if r["n_text_boxes"] > 0]
+    if with_text:
+        mean_whole_l = sum(r["whole_lpips"] for r in with_text) / len(with_text)
+        mean_text_l = sum(r["text_lpips"] for r in with_text) / len(with_text)
+        mean_whole_d = sum(r["whole_dists"] for r in with_text) / len(with_text)
+        mean_text_d = sum(r["text_dists"] for r in with_text) / len(with_text)
+        print(f"\n=== SUMMARY: {len(with_text)}/{len(rows)} images have text ===")
+        print(f"LPIPS  whole={mean_whole_l:.4f}  text-region={mean_text_l:.4f}  delta={mean_text_l-mean_whole_l:+.4f}")
+        print(f"DISTS  whole={mean_whole_d:.4f}  text-region={mean_text_d:.4f}  delta={mean_text_d-mean_whole_d:+.4f}")
+
+    out = pathlib.Path(f"/data/runs/{split}/text_diagnostic.json")
+    out.write_text(json.dumps(rows, indent=1))
+    vol.commit()
+    return str(out)
