@@ -219,6 +219,7 @@ CKPT_PATHS = {
     "r2_12000": "/data/ft_out/checkpoints/AEIC_r2_4_12000.pkl",
     "r2b_6000": "/data/ft_out/checkpoints/AEIC_r2b_2_6000.pkl",
     "r2b_7000": "/data/ft_out/checkpoints/AEIC_r2b_2_7000.pkl",
+    "r3l8_8000": "/data/ft_out/checkpoints/AEIC_r3l8_8_8000.pkl",
     "aigc8_2000": "/data/ft_out/checkpoints/AEIC_ME_aigc88_2000.pkl",
     "aigc8_3000": "/data/ft_out/checkpoints/AEIC_ME_aigc88_3000.pkl",
     "aigc8_4000": "/data/ft_out/checkpoints/AEIC_ME_aigc88_4000.pkl",
@@ -227,7 +228,7 @@ CKPT_PATHS = {
 
 
 @app.function(image=image, volumes={"/data": vol}, gpu=GPU, timeout=43200)
-def refine(plan_json: str, split: str = "val", iters: int = 60, only_tag: str = "", shard: int = 0, nshards: int = 1, lr: float = 1e-3):
+def refine(plan_json: str, split: str = "val", iters: int = 60, only_tag: str = "", shard: int = 0, nshards: int = 1, lr: float = 1e-3, out_dir: str = "refined"):
     """Run latent TTO per image with the checkpoint chosen by the knapsack plan."""
     import json, pathlib, subprocess, sys
     plan = json.loads(plan_json)
@@ -235,7 +236,7 @@ def refine(plan_json: str, split: str = "val", iters: int = 60, only_tag: str = 
     by_tag = {}
     for name, tag in sorted(plan.items()):
         by_tag.setdefault(tag, []).append(gt[name])
-    out_root = f"/data/runs/{split}/refined"
+    out_root = f"/data/runs/{split}/{out_dir}"
     for tag, files in by_tag.items():
         if only_tag and tag != only_tag:
             continue
