@@ -405,3 +405,54 @@ def ocr_boxes(split: str = "val", pad: int = 8):
     dest.write_text(json.dumps(out, indent=1))
     vol.commit()
     return str(dest)
+
+
+@app.function(image=image, volumes={"/data": vol}, gpu="A10G", timeout=43200)
+def train_enhancer(rec_dirs: str, gt_dir: str = "/data/train/train", out_dir: str = "/data/enhancer_out",
+                    steps: int = 8000, resume: str = ""):
+    import subprocess, sys
+    cmd = [
+        sys.executable, "/aeic/src/enhancer.py",
+        f"--rec_dirs={rec_dirs}",
+        f"--gt_dir={gt_dir}",
+        f"--out_dir={out_dir}",
+        f"--steps={steps}",
+    ]
+    if resume:
+        cmd.append(f"--resume={resume}")
+    import time as _time
+    r = subprocess.Popen(cmd, cwd="/aeic/src")
+    while r.poll() is None:
+        _time.sleep(60)
+        vol.commit()
+    vol.commit()
+    if r.returncode != 0:
+        raise RuntimeError("train_enhancer failed")
+    return out_dir
+
+
+@app.function(image=image, volumes={"/data": vol}, gpu=GPU, timeout=7200)
+def apply_enhancer(enhancer_ckpt: str, run_dir: str, out_dir: str):
+    import sys, pathlib, torch
+    sys.path.insert(0, "/aeic/src")
+    from enhancer import Enhancer
+    from PIL import Image
+    from torchvision import transforms
+
+    net = Enhancer().cuda().eval()
+    net.load_state_dict(torch.load(enhancer_ckpt, map_location="cuda"))
+    tf = transforms.ToTensor()
+
+    src = pathlib.Path(run_dir)
+    dst = pathlib.Path(out_dir)
+    (dst / "rec").mkdir(parents=True, exist_ok=True)
+    (dst / "bin").mkdir(parents=True, exist_ok=True)
+    for p in sorted((src / "rec").glob("*.png")):
+        img = tf(Image.open(p).convert("RGB")).cuda().unsqueeze(0)
+        with torch.no_grad():
+            out = net(img).clamp(0, 1)[0].cpu()
+        transforms.ToPILImage()(out).save(dst / "rec" / p.name)
+    for p in (src / "bin").iterdir():
+        (dst / "bin" / p.name).write_bytes(p.read_bytes())
+    vol.commit()
+    return str(dst)
