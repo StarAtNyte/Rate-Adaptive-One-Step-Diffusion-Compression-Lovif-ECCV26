@@ -53,6 +53,12 @@ All compute on Modal (profile `staratnyte0`, volume `aigc-ic`, A10G GPUs). Repo:
 | E31 | 07-10 | Applied champion enhancer (18k steps) to all 8 v9-mix candidates | uniform +0.22 to +0.31 (avg ~+0.27), beats round-1's uniform +0.22 | keep |
 | E32 | 07-10 | Final grand remix with champion enhancer → **v10** | local 111.3249 @ w-bpp 0.0249 | board est **31.3249** (+0.04 over v9) |
 
+| E33 | 07-11 | Enhancer continued (round 5, 15k more steps, total 23k from base) | +0.2574 vs v4's +0.2678 at 18k — **plateaued/regressed slightly**. More steps beyond 18k don't help; small 2400-sample dataset limits capacity. | v4 ck10000 (18k) remains champion, no change |
+| E34 | 07-11 | Text-TTO with 4x tighter rate penalty (rate_w 20000→80000) to get DISTS gain within-budget instead of over-budget | bpp barely moved (0.0436→0.0435) but score dropped (111.38→111.30) — rate_w wasn't the actual constraint on latent growth; tightening it just hurt reconstruction quality for no rate benefit | negative, reverted to rate_w=20000 (already in v10) |
+
+## Research notes (OneDC evaluation, not pursued)
+OneDC (NeurIPS 2025, github.com/onedc-codec/onedc) considered as a genuinely-diverse second codec family for the knapsack (unlike StableCodec, which is AEIC's own predecessor by the same authors — correlated failure modes, low ensemble value). Blocked by: checkpoints behind OneDrive link (hard to script-download headless), requires torch 2.5.0 (conflicts with our pinned 2.1.2, needs a fresh Modal image), and bitstream realism (real entropy-coded vs simulated bpp) undocumented. Multi-hour integration with uncertain payoff — flagged for explicit user go-ahead rather than silently spending the session on it.
+
 ## Queued / running
 - E16: round-3 λ4 "r3l4" (init r2_18000, sd35+sdxl-augmented corpus, 8k steps) — launched 07-09.
 - E20: TTO pass for v6's r3l8_8000 picks (18 imgs) → separate out_dir `refined2` (skip-guard collision with v5-refined dir). Relaunch pending.
