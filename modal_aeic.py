@@ -410,7 +410,8 @@ def ocr_boxes(split: str = "val", pad: int = 8):
 @app.function(image=image, volumes={"/data": vol}, gpu="A10G", timeout=43200)
 def train_enhancer(rec_dirs: str, gt_dir: str = "/data/train/train", out_dir: str = "/data/enhancer_out",
                     steps: int = 8000, resume: str = "", n_blocks: int = 8,
-                    ea_dists_w: float = 1.0, gan_w: float = 0.0, lr: float = 2e-4):
+                    ea_dists_w: float = 1.0, gan_w: float = 0.0, lr: float = 2e-4,
+                    batch_size: int = 8, patch: int = 384):
     import subprocess, sys
     cmd = [
         sys.executable, "/aeic/src/enhancer.py",
@@ -422,6 +423,8 @@ def train_enhancer(rec_dirs: str, gt_dir: str = "/data/train/train", out_dir: st
         f"--ea_dists_w={ea_dists_w}",
         f"--gan_w={gan_w}",
         f"--lr={lr}",
+        f"--batch_size={batch_size}",
+        f"--patch={patch}",
     ]
     if resume:
         cmd.append(f"--resume={resume}")
