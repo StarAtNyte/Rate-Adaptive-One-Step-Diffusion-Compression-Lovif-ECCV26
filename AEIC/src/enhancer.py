@@ -15,6 +15,7 @@ from PIL import Image
 from torchvision import transforms
 import lpips as lpips_pkg
 import pyiqa
+import vision_aided_loss
 
 
 class ResBlock(nn.Module):
@@ -30,6 +31,17 @@ class ResBlock(nn.Module):
         f2 = self.act(self.c2(torch.cat([x, f1], 1)))
         f3 = self.c3(torch.cat([x, f1, f2], 1))
         return x + 0.2 * f3
+
+
+def sobel_edges(x):
+    """x: (B,3,H,W) in [0,1]. Returns per-channel edge magnitude."""
+    gray = (0.299 * x[:, 0:1] + 0.587 * x[:, 1:2] + 0.114 * x[:, 2:3])
+    kx = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=x.dtype, device=x.device).view(1, 1, 3, 3)
+    ky = kx.transpose(2, 3)
+    gx = F.conv2d(gray, kx, padding=1)
+    gy = F.conv2d(gray, ky, padding=1)
+    edge = torch.sqrt(gx ** 2 + gy ** 2 + 1e-6)
+    return edge.repeat(1, 3, 1, 1)  # 3ch so DISTS (expects RGB) is happy
 
 
 class Enhancer(nn.Module):
@@ -91,6 +103,10 @@ def main():
     ap.add_argument("--dists_w", type=float, default=1.5)
     ap.add_argument("--ckpt_every", type=int, default=1000)
     ap.add_argument("--resume", default="")
+    ap.add_argument("--n_blocks", type=int, default=8)
+    ap.add_argument("--ea_dists_w", type=float, default=1.0, help="edge-aware DISTS term weight (0 disables)")
+    ap.add_argument("--gan_w", type=float, default=0.0, help="adversarial loss weight (0 disables GAN)")
+    ap.add_argument("--disc_lr", type=float, default=2e-5)
     args = ap.parse_args()
 
     os.makedirs(args.out_dir, exist_ok=True)
@@ -99,7 +115,7 @@ def main():
     dl = torch.utils.data.DataLoader(ds, batch_size=args.batch_size, shuffle=True,
                                      num_workers=4, drop_last=True, persistent_workers=True)
 
-    net = Enhancer().cuda()
+    net = Enhancer(n_blocks=args.n_blocks).cuda()
     if args.resume:
         net.load_state_dict(torch.load(args.resume, map_location="cuda"))
         print("resumed from", args.resume, flush=True)
@@ -109,6 +125,15 @@ def main():
     lpips_loss = lpips_pkg.LPIPS(net="alex").cuda()
     lpips_loss.requires_grad_(False)
     dists_loss = pyiqa.create_metric("dists", device="cuda", as_loss=True)
+
+    net_disc = opt_disc = None
+    if args.gan_w > 0:
+        net_disc = vision_aided_loss.Discriminator(cv_type="dino", output_type="conv_multi_level",
+                                                     loss_type="multilevel_sigmoid_s", device="cuda")
+        net_disc = net_disc.cuda()
+        net_disc.cv_ensemble.requires_grad_(False)
+        net_disc.train()
+        opt_disc = torch.optim.AdamW(net_disc.parameters(), lr=args.disc_lr)
 
     step = 0
     t0 = time.time()
@@ -121,16 +146,31 @@ def main():
             l1 = F.l1_loss(out, gt)
             lp = lpips_loss(out * 2 - 1, gt * 2 - 1).mean()
             dt = dists_loss(out, gt).mean()
-            loss = args.l1_w * l1 + args.lpips_w * lp + args.dists_w * dt
+            ea = torch.tensor(0.0, device=out.device)
+            if args.ea_dists_w > 0:
+                ea = dists_loss(sobel_edges(out), sobel_edges(gt)).mean()
+            gan_g = torch.tensor(0.0, device=out.device)
+            if net_disc is not None:
+                gan_g = net_disc(out * 2 - 1, for_G=True).mean()
+            loss = (args.l1_w * l1 + args.lpips_w * lp + args.dists_w * dt
+                    + args.ea_dists_w * ea + args.gan_w * gan_g)
             opt.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(net.parameters(), 1.0)
             opt.step()
+
+            if net_disc is not None:
+                d_real = net_disc(gt.detach() * 2 - 1, for_real=True).mean()
+                opt_disc.zero_grad(); d_real.backward(); opt_disc.step()
+                d_fake = net_disc(out.detach() * 2 - 1, for_real=False).mean()
+                opt_disc.zero_grad(); d_fake.backward(); opt_disc.step()
+
             sched.step()
             step += 1
             if step % 50 == 0:
                 print(f"step {step}/{args.steps} loss={loss.item():.4f} l1={l1.item():.4f} "
-                      f"lpips={lp.item():.4f} dists={dt.item():.4f} ({time.time()-t0:.0f}s)", flush=True)
+                      f"lpips={lp.item():.4f} dists={dt.item():.4f} ea={ea.item():.4f} gan_g={gan_g.item():.4f} "
+                      f"({time.time()-t0:.0f}s)", flush=True)
             if step % args.ckpt_every == 0 or step == args.steps:
                 torch.save(net.state_dict(), os.path.join(args.out_dir, f"enhancer_{step}.pt"))
                 print("saved", step, flush=True)
