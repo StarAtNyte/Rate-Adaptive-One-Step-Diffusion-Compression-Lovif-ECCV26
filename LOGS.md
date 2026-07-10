@@ -49,7 +49,9 @@ All compute on Modal (profile `staratnyte0`, volume `aigc-ic`, A10G GPUs). Repo:
 
 | E28 | 07-10 | Enhancer round 2: EA-DISTS + DINO GAN, resumed from round-1 8k ckpt, full 2400 pairs, 10k steps (batch3/patch256 for VRAM) | GAN loss **regresses** vs round-1 alone: best round-2 ckpt (1000) = +0.16 vs round-1's ck8000 = +0.22. Confirms literature warning (NTIRE 2026: adversarial training unstable under multi-metric optimization). GAN not adopted. | negative result, real finding |
 | E29 | 07-10 | Isolated EA-DISTS-only retest (gan_w=0), resumed from round-1 8k, 3k steps | ck1000 +0.2108, ck3000 +0.2046 — plateaus, does NOT beat round-1 plain (+0.2204). **Neither GAN nor EA-DISTS improved on plain L1+LPIPS+DISTS.** | negative result — proven recipe stays: enhancer_out/enhancer_8000.pt (used in v9) |
-| E30 | 07-10 | Continue proven plain recipe (no GAN, no EA) another 10k steps from ck8000, lr 1e-4 | running | test if more steps alone (not new loss terms) helps |
+| E30 | 07-10 | Continue proven plain recipe (no GAN, no EA) another 10k steps from ck8000, lr 1e-4, full 18k total | ckpt10000: **+0.2678** vs base (round-1's ck8000 was +0.2204) — real gain, confirms it's TRAINING DURATION not loss-function additions that helps | new champion enhancer |
+| E31 | 07-10 | Applied champion enhancer (18k steps) to all 8 v9-mix candidates | uniform +0.22 to +0.31 (avg ~+0.27), beats round-1's uniform +0.22 | keep |
+| E32 | 07-10 | Final grand remix with champion enhancer → **v10** | local 111.3249 @ w-bpp 0.0249 | board est **31.3249** (+0.04 over v9) |
 
 ## Queued / running
 - E16: round-3 λ4 "r3l4" (init r2_18000, sd35+sdxl-augmented corpus, 8k steps) — launched 07-09.
