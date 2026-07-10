@@ -47,7 +47,8 @@ All compute on Modal (profile `staratnyte0`, volume `aigc-ic`, A10G GPUs). Repo:
 | E26 | 07-09/10 | E17 decoder-side enhancer: 1814 pairs, 8 RRDB residual CNN (~1.5M params), L1+LPIPS+DISTS loss, 8k steps to convergence | +0.22 avg score gain, UNIFORM across every candidate type (0.19-0.25 range), zero bpp cost (post-decode) | ships in final decoder, stacks with everything |
 | E27 | 07-10 | Grand remix with all enhanced candidates → **v9** | local 111.286 @ w-bpp 0.0249 | board est **31.2863** (+0.19 over v8) |
 
-| E28 | 07-10 | Enhancer round 2: added EA-DISTS (Sobel-edge DISTS term, `DISTS(out,gt)+DISTS(Sobel(out),Sobel(gt))`), DINO GAN discriminator (same recipe as AEIC's own stable training), resumed from round-1 8k ckpt, full 2400 pairs, 10k more steps | OOM with batch8/patch384+GAN — fixed with batch3/patch256. Running. | research: EA-DISTS formula + GAN literature (Real-ESRGAN/SeedVR2 recipes) |
+| E28 | 07-10 | Enhancer round 2: EA-DISTS + DINO GAN, resumed from round-1 8k ckpt, full 2400 pairs, 10k steps (batch3/patch256 for VRAM) | GAN loss **regresses** vs round-1 alone: best round-2 ckpt (1000) = +0.16 vs round-1's ck8000 = +0.22. Confirms literature warning (NTIRE 2026: adversarial training unstable under multi-metric optimization). GAN not adopted. | negative result, real finding |
+| E29 | 07-10 | Isolated EA-DISTS-only retest (gan_w=0), resumed from round-1 8k, 3k steps | running | isolate which round-2 component helped/hurt |
 
 ## Queued / running
 - E16: round-3 λ4 "r3l4" (init r2_18000, sd35+sdxl-augmented corpus, 8k steps) — launched 07-09.
