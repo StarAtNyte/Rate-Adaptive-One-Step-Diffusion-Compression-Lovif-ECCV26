@@ -507,3 +507,42 @@ def adcsr_size():
     import pathlib
     p = pathlib.Path(f"{W}/adcsr/weight/pretrained/halfDecoder.ckpt")
     print(p.name, round(p.stat().st_size/1e6, 1), "MB")
+
+
+@app.function(image=image, volumes={"/data": vol}, timeout=1800)
+def package_decoder(ckpts: str = "r2b_7000,r3l4_8000,r3l8_8000,aigc8_5000"):
+    """Assemble the shippable decoder: trimmed SD-Turbo (fp16, unet+vae only), AdcSR halfDecoder,
+    4 AEIC checkpoints, enhancer weights, AEIC/src code."""
+    import pathlib, shutil, zipfile
+    ckpt_paths = {
+        "r2b_7000": "AEIC_r2b_2_7000.pkl", "r3l4_8000": "AEIC_r3l4_4_8000.pkl",
+        "r3l8_8000": "AEIC_r3l8_8_8000.pkl", "aigc8_5000": "AEIC_ME_aigc88_5000.pkl",
+    }
+    dst = pathlib.Path("/data/decoder_package")
+    shutil.rmtree(dst, ignore_errors=True)
+    (dst / "sd-turbo" / "unet").mkdir(parents=True)
+    (dst / "sd-turbo" / "vae").mkdir(parents=True)
+    (dst / "adcsr").mkdir(parents=True)
+    (dst / "aeic_ckpts").mkdir(parents=True)
+
+    for sub in ("unet", "vae"):
+        src = pathlib.Path(f"{W}/sd-turbo/{sub}")
+        for f in src.iterdir():
+            if f.is_file() and ("fp16" in f.name or f.suffix == ".json"):
+                shutil.copy(f, dst / "sd-turbo" / sub / f.name.replace(".fp16", ""))
+    shutil.copy(f"{W}/adcsr/weight/pretrained/halfDecoder.ckpt", dst / "adcsr" / "halfDecoder.ckpt")
+    for tag in ckpts.split(","):
+        fname = ckpt_paths[tag]
+        src = pathlib.Path(f"/data/ft_out/checkpoints/{fname}") if not (pathlib.Path(f"{W}/aeic_ckpts/{fname}")).exists() else pathlib.Path(f"{W}/aeic_ckpts/{fname}")
+        shutil.copy(src, dst / "aeic_ckpts" / fname)
+    shutil.copy("/data/enhancer_out_v4/enhancer_10000.pt", dst / "enhancer.pt")
+    shutil.copytree("/aeic/src", dst / "src", dirs_exist_ok=True)
+
+    total = sum(f.stat().st_size for f in dst.rglob("*") if f.is_file())
+    print(f"TOTAL PACKAGE SIZE: {total/1e9:.3f} GB")
+    for sub in sorted(dst.iterdir()):
+        if sub.is_dir():
+            sz = sum(f.stat().st_size for f in sub.rglob("*") if f.is_file())
+            print(f"  {sub.name}: {sz/1e9:.3f} GB")
+    vol.commit()
+    return total
