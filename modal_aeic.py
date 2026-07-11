@@ -467,3 +467,43 @@ def apply_enhancer(enhancer_ckpt: str, run_dir: str, out_dir: str):
         (dst / "bin" / p.name).write_bytes(p.read_bytes())
     vol.commit()
     return str(dst)
+
+
+@app.function(image=image, volumes={"/data": vol}, timeout=600)
+def decoder_size_check():
+    import pathlib
+    def sz(p):
+        p = pathlib.Path(p)
+        return sum(f.stat().st_size for f in p.rglob("*") if f.is_file()) if p.is_dir() else (p.stat().st_size if p.exists() else 0)
+    fixed = sz(f"{W}/sd-turbo") + sz(f"{W}/adcsr")
+    print(f"SD-Turbo + VAE decoder: {fixed/1e9:.3f} GB")
+    ckpt_dir = pathlib.Path(f"{W}/aeic_ckpts")
+    for p in sorted(ckpt_dir.glob("*.pkl")):
+        print(p.name, round(p.stat().st_size/1e6, 1), "MB")
+    ft_dir = pathlib.Path("/data/ft_out/checkpoints")
+    if ft_dir.exists():
+        for p in sorted(ft_dir.glob("*.pkl")):
+            print(p.name, round(p.stat().st_size/1e6, 1), "MB")
+    enh = pathlib.Path("/data/enhancer_out_v4/enhancer_10000.pt")
+    if enh.exists():
+        print("enhancer:", round(enh.stat().st_size/1e6, 2), "MB")
+
+
+@app.function(image=image, volumes={"/data": vol}, timeout=600)
+def sdturbo_breakdown():
+    import pathlib
+    root = pathlib.Path(f"{W}/sd-turbo")
+    for sub in sorted(root.iterdir()):
+        if sub.is_dir():
+            sz = sum(f.stat().st_size for f in sub.rglob("*") if f.is_file())
+            print(sub.name, round(sz/1e9, 3), "GB")
+            for f in sorted(sub.iterdir()):
+                if f.is_file():
+                    print("   ", f.name, round(f.stat().st_size/1e6, 1), "MB")
+
+
+@app.function(image=image, volumes={"/data": vol}, timeout=600)
+def adcsr_size():
+    import pathlib
+    p = pathlib.Path(f"{W}/adcsr/weight/pretrained/halfDecoder.ckpt")
+    print(p.name, round(p.stat().st_size/1e6, 1), "MB")
