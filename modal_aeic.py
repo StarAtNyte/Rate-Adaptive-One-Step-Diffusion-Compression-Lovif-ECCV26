@@ -443,14 +443,14 @@ def train_enhancer(rec_dirs: str, gt_dir: str = "/data/train/train", out_dir: st
 
 
 @app.function(image=image, volumes={"/data": vol}, gpu=GPU, timeout=7200)
-def apply_enhancer(enhancer_ckpt: str, run_dir: str, out_dir: str):
+def apply_enhancer(enhancer_ckpt: str, run_dir: str, out_dir: str, n_blocks: int = 8):
     import sys, pathlib, torch
     sys.path.insert(0, "/aeic/src")
     from enhancer import Enhancer
     from PIL import Image
     from torchvision import transforms
 
-    net = Enhancer().cuda().eval()
+    net = Enhancer(n_blocks=n_blocks).cuda().eval()
     net.load_state_dict(torch.load(enhancer_ckpt, map_location="cuda"))
     tf = transforms.ToTensor()
 
@@ -546,3 +546,18 @@ def package_decoder(ckpts: str = "r2b_7000,r3l4_8000,r3l8_8000,aigc8_5000"):
             print(f"  {sub.name}: {sz/1e9:.3f} GB")
     vol.commit()
     return total
+
+
+@app.function(image=image, volumes={"/data": vol}, timeout=600)
+def checkpoint_breakdown(ckpt: str = "AEIC_r2_4_18000.pkl"):
+    import torch, pathlib
+    path = pathlib.Path(f"/data/ft_out/checkpoints/{ckpt}")
+    if not path.exists():
+        path = pathlib.Path(f"{W}/aeic_ckpts/{ckpt}")
+    d = torch.load(path, map_location="cpu")
+    for k, v in d.items():
+        if isinstance(v, dict):
+            n = sum(p.numel() * p.element_size() for p in v.values() if hasattr(p, "numel"))
+            print(k, round(n/1e6, 2), "MB", len(v), "tensors")
+        else:
+            print(k, type(v))
