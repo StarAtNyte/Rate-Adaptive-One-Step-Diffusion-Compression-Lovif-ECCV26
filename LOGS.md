@@ -116,3 +116,5 @@ LPIPS −0.020 (≈0.8 pts) + DISTS −0.010 (≈0.4 pts); PSNR/MS-SSIM now at p
 
 | E55 | 07-12 | Full 100-img crop_ly=24 TTO (300 iters) + matched enhancer, evaluated | 111.5709 raw mean @ 0.03192 naive bpp (vs crop16-300's 111.2242@0.03115) | positive, real per-candidate gain |
 | E56 | 07-12 | Rebuilt knapsack solver using TRUE weighted bpp (bits/pixels via real image dims, not mean of per-image bpp — caught a solver bug: naive mean-bpp constraint badly misallocates when val images have very different resolutions) | Added crop24 candidate to the 7-candidate mix (300crop16, 500crop16, 4 raw+enh, text_long) | **v18**: local 111.5207 @ w-bpp 0.024947, crop24 wins 25/100 images. submission_v18_crop24mix.zip |
+
+| E57 | 07-12 | **v18 board confirmed: 31.5207** — WORSE than v17's 31.5270 (−0.0063) | crop_ly=24 candidate net-negative in the real knapsack despite +raw-score-per-candidate; local solver reproduction of v17's exact candidate set scored 111.4834 vs v17's real 111.5270 (0.04 gap — solver/pipeline mismatch not fully diagnosed), crop24 addition didn't close it | **v17 remains best submission.** crop-window-size lever closed out, negative. |
