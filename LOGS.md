@@ -73,7 +73,13 @@ Raw 4-ckpt knapsack: 30.84 board est (vs v10's dev-only 31.32 using unshippable 
 | E44 | 07-11 | Complete final remix (all TTO variants × both enhancers × 4 raw+enhanced) → **v14, submission_v14_shippable.zip** | local 111.3774 @ w-bpp 0.0249 | **board 31.3774 confirmed exact.** Gap to UnoChen: **0.933** |
 | E45 | 07-11 | 16-block (2x capacity) enhancer trained on matched distribution, 18k steps, tested at full convergence | 111.2475 vs 8-block's 111.2689 — **slightly worse**, capacity was never the bottleneck | negative, closes out enhancer architecture search |
 
-## Conclusion (07-11): enhancer + TTO search space exhausted
+| E46 | 07-12 | Knapsack CAP margin sweep (0.0249→0.02499, free/no-GPU) → **v15** | local 111.3981 @ w-bpp 0.02498 | board est **31.3981** (+0.02 free) |
+| E47 | 07-12 | TTO at 300 iters (3x depth vs previous 100-150) on all 100 images, seeded from correct 4-ckpt set + matched enhancer | **111.5264 @ 0.0312 — real +0.26 gain**, far bigger than any enhancer tweak. Wins 60/100 in final remix. | reverses "search space exhausted" conclusion — TTO depth was NOT saturated |
+| E48 | 07-12 | Final remix incl. 300-iter TTO → **v16, submission_v16_shippable.zip** | local 111.5141 @ w-bpp 0.024979 | board est **31.5141**. Gap to UnoChen: **0.796** |
+| E49 | 07-12 | 300-iter text-biased TTO (matching new depth) on 52 text images | running | extend the E47 finding to text-weighted path |
+
+## Conclusion (07-11, REVISED 07-12): TTO depth was the real remaining lever
+The E33-E45 "exhausted" conclusion was premature — those experiments varied loss functions and enhancer capacity, but never simply ran TTO longer. 300 iters (vs 100-150) gave +0.26, the single biggest gain since the shippable-set rebuild. Still open: does 500+ iters help further, or does this plateau too?
 Tried and ruled out: GAN loss (E28), EA-DISTS (E29), more steps beyond 18k (E33), tighter rate penalty (E34), bigger capacity (E45). Only real wins: training duration to 18k (E30), distribution-matched retraining (E40), correct-seed text-TTO (E43). **submission_v14_shippable.zip (board est 31.3774) is the practical ceiling for this architecture** without a genuinely different codec family (OneDC, blocked on manual download) or a new base-training round. Gap to UnoChen: 0.933.
 
 ## Research notes (OneDC evaluation, not pursued)
