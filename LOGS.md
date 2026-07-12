@@ -113,3 +113,6 @@ LPIPS −0.020 (≈0.8 pts) + DISTS −0.010 (≈0.4 pts); PSNR/MS-SSIM now at p
 - Naive-vs-weighted bpp: always check the organizer's exact arithmetic against a known submission before optimizing the constraint.
 
 | E54 | 07-12 | crop_ly TTO experiment: expose --crop_ly (default 16=512px crop) to test bigger context per iteration | 8-img subset @300iters: crop24 vs crop16 → **+0.12/img** (dists 0.0430 vs 0.0476, notably better; bpp +2.4%) | positive signal, launched full 100-img run |
+
+| E55 | 07-12 | Full 100-img crop_ly=24 TTO (300 iters) + matched enhancer, evaluated | 111.5709 raw mean @ 0.03192 naive bpp (vs crop16-300's 111.2242@0.03115) | positive, real per-candidate gain |
+| E56 | 07-12 | Rebuilt knapsack solver using TRUE weighted bpp (bits/pixels via real image dims, not mean of per-image bpp — caught a solver bug: naive mean-bpp constraint badly misallocates when val images have very different resolutions) | Added crop24 candidate to the 7-candidate mix (300crop16, 500crop16, 4 raw+enh, text_long) | **v18**: local 111.5207 @ w-bpp 0.024947, crop24 wins 25/100 images. submission_v18_crop24mix.zip |
