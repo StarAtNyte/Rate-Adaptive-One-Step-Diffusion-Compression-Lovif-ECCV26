@@ -149,6 +149,7 @@ def main():
     ap.add_argument("--text_boxes_json", default="", help="path to {name: [[x0,y0,x1,y1],...]} pixel-coord boxes")
     ap.add_argument("--text_bias", type=float, default=0.7, help="fraction of iters that sample a text-box crop when available")
     ap.add_argument("--text_dists_w", type=float, default=3.0, help="extra DISTS weight multiplier on text crops")
+    ap.add_argument("--seed", type=int, default=0, help="RNG seed for per-iteration crop sampling")
     args = ap.parse_args()
 
     text_boxes_all = {}
@@ -190,7 +191,7 @@ def main():
         opt = torch.optim.Adam([y], lr=args.lr)
 
         import random
-        rng = random.Random(0)
+        rng = random.Random(args.seed)
         yH, yW = y0.shape[2:]
         LY = min(args.crop_ly, yH, yW)
         M = 2                  # decode margin in y-latent px
