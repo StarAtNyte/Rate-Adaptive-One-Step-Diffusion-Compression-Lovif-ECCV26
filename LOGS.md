@@ -111,3 +111,5 @@ LPIPS −0.020 (≈0.8 pts) + DISTS −0.010 (≈0.4 pts); PSNR/MS-SSIM now at p
 - gdown CLI on Modal images is stale — use python API `gdown.download(id=...)`.
 - TTO gradient rule: never backprop through the 4-group autoregressive conditioning — freeze means/scales from the init pass (E8 diverged; E18 works).
 - Naive-vs-weighted bpp: always check the organizer's exact arithmetic against a known submission before optimizing the constraint.
+
+| E54 | 07-12 | crop_ly TTO experiment: expose --crop_ly (default 16=512px crop) to test bigger context per iteration | 8-img subset @300iters: crop24 vs crop16 → **+0.12/img** (dists 0.0430 vs 0.0476, notably better; bpp +2.4%) | positive signal, launched full 100-img run |
