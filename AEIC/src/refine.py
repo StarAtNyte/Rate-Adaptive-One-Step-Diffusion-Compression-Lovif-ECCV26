@@ -145,6 +145,7 @@ def main():
     ap.add_argument("--latent_tiled_size", type=int, default=96)
     ap.add_argument("--latent_tiled_overlap", type=int, default=32)
     ap.add_argument("--use_practical_entropy_coding", default=True, action="store_true")
+    ap.add_argument("--crop_ly", type=int, default=16, help="TTO crop size in latent px (16=512px, 24=768px, 32=1024px)")
     ap.add_argument("--text_boxes_json", default="", help="path to {name: [[x0,y0,x1,y1],...]} pixel-coord boxes")
     ap.add_argument("--text_bias", type=float, default=0.7, help="fraction of iters that sample a text-box crop when available")
     ap.add_argument("--text_dists_w", type=float, default=3.0, help="extra DISTS weight multiplier on text crops")
@@ -191,7 +192,7 @@ def main():
         import random
         rng = random.Random(0)
         yH, yW = y0.shape[2:]
-        LY = min(16, yH, yW)   # 16 latent px = 512 pixel crop
+        LY = min(args.crop_ly, yH, yW)
         M = 2                  # decode margin in y-latent px
         img_boxes = text_boxes_all.get(name + ".png", []) or text_boxes_all.get(name, [])
 
