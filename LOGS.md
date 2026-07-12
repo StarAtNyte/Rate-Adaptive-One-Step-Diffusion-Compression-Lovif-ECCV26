@@ -78,6 +78,14 @@ Raw 4-ckpt knapsack: 30.84 board est (vs v10's dev-only 31.32 using unshippable 
 | E48 | 07-12 | Final remix incl. 300-iter TTO → **v16, submission_v16_shippable.zip** | local 111.5141 @ w-bpp 0.024979 | board est **31.5141**. Gap to UnoChen: **0.796** |
 | E49 | 07-12 | 300-iter text-biased TTO (matching new depth) on 52 text images | running | extend the E47 finding to text-weighted path |
 
+| E50 | 07-12 | 300-iter text-biased TTO (recovering from a mid-run crash on r3l8_8000, resumed via skip-guard) | 110.43@0.0329 vs 150-iter's 110.33@0.0324 | +0.096, consistent with main trend |
+| E51 | 07-12 | 500-iter sanity test on 10-image subset before full commit | mean Δ+0.19 vs 300-iter, still positive | real headroom, committed to full run |
+| E52 | 07-12 | Full 500-iter TTO (100 images, 3 shards) + matched enhancer | 111.5532@0.0319 vs 300-iter's 111.5264@0.0312 | +0.027 raw, but knapsack-level gain tiny — extra iters cost more bits than budget can afford for most images |
+| E53 | 07-12 | Final remix incl. 500-iter candidates → **v17, submission_v17_shippable.zip** | local 111.5270 @ w-bpp 0.024979 | board est **31.5270** (+0.013 over v16) — 300-iter still wins 44/100 vs 500-iter's 19. **TTO-depth curve has clearly bent: 150→300 gave +0.26, 300→500 gives +0.013.** |
+
+## Conclusion (07-12): TTO depth diminishing returns confirmed at ~300 iters
+150→300 iters: +0.26 (large). 300→500 iters: +0.013 (near-zero after budget competition). Further iteration increases (1000+) not worth pursuing — cost in bits exceeds knapsack-level value for the vast majority of images. 300 iters is the practical sweet spot for this setup.
+
 ## Conclusion (07-11, REVISED 07-12): TTO depth was the real remaining lever
 The E33-E45 "exhausted" conclusion was premature — those experiments varied loss functions and enhancer capacity, but never simply ran TTO longer. 300 iters (vs 100-150) gave +0.26, the single biggest gain since the shippable-set rebuild. Still open: does 500+ iters help further, or does this plateau too?
 Tried and ruled out: GAN loss (E28), EA-DISTS (E29), more steps beyond 18k (E33), tighter rate penalty (E34), bigger capacity (E45). Only real wins: training duration to 18k (E30), distribution-matched retraining (E40), correct-seed text-TTO (E43). **submission_v14_shippable.zip (board est 31.3774) is the practical ceiling for this architecture** without a genuinely different codec family (OneDC, blocked on manual download) or a new base-training round. Gap to UnoChen: 0.933.
