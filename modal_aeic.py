@@ -115,6 +115,61 @@ def evaluate(run_dir: str, split: str = "val"):
     return agg
 
 
+@app.function(image=image, volumes={"/data": vol}, timeout=1800)
+def budget_ablation(candidate_tags: str, cap_bpp: float = 0.02499, split: str = "val"):
+    """Exact budgeted candidate selection from already-evaluated run folders."""
+    import json, pathlib
+    import numpy as np
+    from PIL import Image
+    from scipy.optimize import Bounds, LinearConstraint, milp
+
+    tags = [x for x in candidate_tags.split(",") if x]
+    gt = {p.name: p for p in pathlib.Path(f"/data/{split}").rglob("*.png")}
+    names = sorted(gt)
+    pixels = {n: Image.open(gt[n]).size[0] * Image.open(gt[n]).size[1] for n in names}
+    rows = {}
+    for tag in tags:
+        p = pathlib.Path(f"/data/runs/{split}/{tag}/metrics.json")
+        rows[tag] = {r["name"]: r for r in json.loads(p.read_text())["per_image"]}
+
+    variables = []
+    for n in names:
+        for tag in tags:
+            if n not in rows[tag]:
+                continue
+            r = rows[tag][n]
+            stem = pathlib.Path(n).stem
+            bp = pathlib.Path(f"/data/runs/{split}/{tag}/bin/{stem}")
+            if not bp.exists(): bp = bp.with_suffix(".bin")
+            bits = bp.stat().st_size * 8
+            score = r["psnr"] + 10*r["msssim"] + 40*(1-r["lpips_alex"]) + 40*(1-r["dists"])
+            variables.append((n, tag, bits, score, r))
+
+    m = len(names)
+    c = -np.array([v[3] for v in variables])
+    Aeq = np.zeros((m, len(variables)))
+    name_index = {n: i for i, n in enumerate(names)}
+    for j, v in enumerate(variables): Aeq[name_index[v[0]], j] = 1
+    bitrow = np.array([[v[2] for v in variables]], dtype=float)
+    max_bits = cap_bpp * sum(pixels.values())
+    constraints = [LinearConstraint(Aeq, np.ones(m), np.ones(m)),
+                   LinearConstraint(bitrow, -np.inf, max_bits)]
+    res = milp(c, integrality=np.ones(len(c)), bounds=Bounds(0, 1), constraints=constraints,
+               options={"time_limit": 600})
+    if not res.success: raise RuntimeError(str(res.message))
+    chosen = [variables[i] for i, x in enumerate(res.x) if x > 0.5]
+    mean = lambda key: float(np.mean([v[4][key] for v in chosen]))
+    out = {key: mean(key) for key in ("psnr", "msssim", "lpips_alex", "lpips_vgg", "dists")}
+    out["score"] = out["psnr"] + 10*out["msssim"] + 40*(1-out["lpips_alex"]) + 40*(1-out["dists"])
+    out["weighted_bpp"] = sum(v[2] for v in chosen) / sum(pixels.values())
+    out["counts"] = {tag: sum(v[1] == tag for v in chosen) for tag in tags if any(v[1] == tag for v in chosen)}
+    out["plan"] = {v[0]: v[1] for v in chosen}
+    dest = pathlib.Path(f"/data/runs/{split}/ablation_{'with_tto' if any('refined' in t for t in tags) else 'without_tto'}.json")
+    dest.write_text(json.dumps(out, indent=2)); vol.commit()
+    print(json.dumps({k:v for k,v in out.items() if k != "plan"}, indent=2))
+    return out
+
+
 @app.function(image=image, volumes={"/data": vol}, timeout=3600)
 def pack(plan_json: str, out_name: str = "submission.zip", split: str = "val"):
     import json, pathlib, zipfile, shutil
@@ -240,7 +295,7 @@ CKPT_PATHS = {
 @app.function(image=image, volumes={"/data": vol}, gpu=GPU, timeout=43200)
 def refine(plan_json: str, split: str = "val", iters: int = 60, only_tag: str = "", shard: int = 0, nshards: int = 1, lr: float = 1e-3, out_dir: str = "refined",
            text_boxes_path: str = "", text_bias: float = 0.7, text_dists_w: float = 3.0, only_with_text: bool = False,
-           rate_w: float = 20000.0, mse_w: float = 1000.0, crop_ly: int = 16, seed: int = 0):
+           rate_w: float = 20000.0, mse_w: float = 1000.0, dists_w: float = 40.0, crop_ly: int = 16, seed: int = 0):
     """Run latent TTO per image with the checkpoint chosen by the knapsack plan."""
     import json, pathlib, subprocess, sys
     plan = json.loads(plan_json)
@@ -273,6 +328,7 @@ def refine(plan_json: str, split: str = "val", iters: int = 60, only_tag: str = 
             f"--lr={lr}",
             f"--rate_w={rate_w}",
             f"--mse_w={mse_w}",
+            f"--dists_w={dists_w}",
             f"--crop_ly={crop_ly}",
             f"--seed={seed}",
         ]

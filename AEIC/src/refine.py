@@ -134,6 +134,7 @@ def main():
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--rate_w", type=float, default=20000)
     ap.add_argument("--mse_w", type=float, default=1000)
+    ap.add_argument("--dists_w", type=float, default=40)
     ap.add_argument("--lora_rank_unet", default=32, type=int)
     ap.add_argument("--enable_xformers_memory_efficient_attention", default=True)
     ap.add_argument("--color_fix", default=True)
@@ -230,7 +231,7 @@ def main():
             mse = F.mse_loss(xh01, x01)
             lp = lpips_loss(xc_hat, xc).mean()
             dt = dists_loss(xh01, x01).mean()
-            dt_w = 40 * (args.text_dists_w if is_text_iter else 1.0)
+            dt_w = args.dists_w * (args.text_dists_w if is_text_iter else 1.0)
             rate_pen = F.relu(bpp - bpp0.detach())
             loss = args.mse_w * mse + 40 * lp + dt_w * dt + args.rate_w * rate_pen
           if True:
