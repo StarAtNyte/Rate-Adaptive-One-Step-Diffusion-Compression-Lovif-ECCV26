@@ -127,3 +127,9 @@ LPIPS −0.020 (≈0.8 pts) + DISTS −0.010 (≈0.4 pts); PSNR/MS-SSIM now at p
 
 ## Conclusion (07-13): AEIC/TTO local objective is saturated
 Exact selection recovered a small free gain to 31.5645, but loss-weight calibration failed and the remaining gap to 33.5 is ~1.94. Incremental AEIC enhancer/TTO tuning is not a credible route to the target. Next branch: integrate a genuinely different one-step diffusion codec (OSCAR first because one checkpoint supports multiple rates; OneDC second if its OneDrive weights can be downloaded reproducibly), evaluate real entropy-coded outputs, and add them to the exact weighted knapsack.
+
+| E63 | 07-13 | Re-verified E58 MILP claim with widened candidate pool (9 candidates incl. 150-iter text variant) | best reproducible: **111.5395 @ 0.024990** — still below v17's board-confirmed 111.5270 local... marginal, not a clean win either way | E58's 31.5645 claim not reproducible from available candidate metrics; crop24 is not a live lever under any solver. v17 stays best. |
+| E64 | 07-13 | Multi-seed TTO ensemble test (seed=1 vs seed=0, 300 iters crop16, 8-img subset) | seed1 loses 6/8 images, mean **−0.22/img**; wins are marginal (+0.04, +0.28), one big loss (−1.30) | negative — TTO convergence is seed-insensitive, not a useful diversity lever. Closed. |
+
+## Conclusion (07-13, cont.): search space re-confirmed exhausted
+Crop window (E54-57), loss-weight calibration (E60-61), and TTO seed diversity (E64) all closed negative/marginal. OSCAR rejected (E62). v17 (board 31.5270) remains the practical ceiling for this architecture. Remaining real lever is OneDC (blocked on manual OneDrive download) — user declined to pursue for now. Recommend locking in v17 and shifting effort to 07-18 decoder package deliverables (README, factsheet, submission email) unless a new idea surfaces.
