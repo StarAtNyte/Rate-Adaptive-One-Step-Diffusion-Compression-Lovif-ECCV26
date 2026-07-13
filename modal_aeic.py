@@ -270,6 +270,10 @@ def fix_evalset():
     vol.commit()
 
 
+# canonical id<->tag mapping written into every bitstream's 1-byte header (see AEIC/src/refine.py
+# write_uchars call) so decode.py can tell which of the 4 shipped checkpoints to load
+SHIPPABLE_CKPT_ORDER = ["aigc8_5000", "r2_18000", "r3l4_8000", "r3l8_8000"]
+
 CKPT_PATHS = {
     "AEIC_ME_ft2": f"{W}/aeic_ckpts/AEIC_ME_ft2.pkl",
     "AEIC_ME_ft4": f"{W}/aeic_ckpts/AEIC_ME_ft4.pkl",
@@ -316,6 +320,7 @@ def refine(plan_json: str, split: str = "val", iters: int = 60, only_tag: str = 
         if not files:
             continue
         import time as _time
+        ckpt_id = SHIPPABLE_CKPT_ORDER.index(tag) if tag in SHIPPABLE_CKPT_ORDER else 255
         cmd = [
             sys.executable, "/aeic/src/refine.py",
             f"--sd_path={W}/sd-turbo",
@@ -331,6 +336,7 @@ def refine(plan_json: str, split: str = "val", iters: int = 60, only_tag: str = 
             f"--dists_w={dists_w}",
             f"--crop_ly={crop_ly}",
             f"--seed={seed}",
+            f"--ckpt_id={ckpt_id}",
         ]
         if text_boxes_path:
             cmd += [f"--text_boxes_json={text_boxes_path}", f"--text_bias={text_bias}", f"--text_dists_w={text_dists_w}"]
@@ -567,6 +573,38 @@ def adcsr_size():
     print(p.name, round(p.stat().st_size/1e6, 1), "MB")
 
 
+@app.function(image=image, volumes={"/data": vol}, gpu=GPU, timeout=1800)
+def decode_selfcheck(bin_dir: str, split: str = "val"):
+    """Runs the standalone decode.py against a real bitstream dir (from refine()/compress())
+    and confirms it reproduces valid images -- the same code path the organizer runs after
+    the 07-18 decoder submission, so this must pass before shipping the package."""
+    import subprocess, sys, pathlib, shutil
+    ckpt_dir = "/tmp/aeic_ckpts_selfcheck"
+    pathlib.Path(ckpt_dir).mkdir(exist_ok=True)
+    for tag, fname in zip(SHIPPABLE_CKPT_ORDER,
+                           ["AEIC_ME_aigc88_5000.pkl", "AEIC_r2_4_18000.pkl", "AEIC_r3l4_4_8000.pkl", "AEIC_r3l8_8_8000.pkl"]):
+        src = pathlib.Path(CKPT_PATHS[tag])
+        dst = pathlib.Path(ckpt_dir) / fname
+        if not dst.exists():
+            shutil.copy(src, dst)
+    out_dir = "/tmp/decode_selfcheck_out"
+    r = subprocess.run([
+        sys.executable, "/aeic/src/decode.py",
+        f"--sd_path={W}/sd-turbo",
+        f"--vae_decoder_path={W}/adcsr/weight/pretrained/halfDecoder.ckpt",
+        f"--ckpt_dir={ckpt_dir}",
+        "--enhancer_ckpt=/data/enhancer_out_matched/enhancer_18000.pt",
+        f"--bin_path={bin_dir}",
+        f"--rec_path={out_dir}",
+    ], cwd="/aeic/src", capture_output=True, text=True)
+    print(r.stdout[-3000:])
+    if r.returncode != 0:
+        raise RuntimeError("decode.py failed:\n" + r.stderr[-4000:])
+    n = len(list(pathlib.Path(out_dir).glob("*.png")))
+    print(f"decode_selfcheck OK: {n} images decoded to {out_dir}")
+    return n
+
+
 @app.function(image=image, volumes={"/data": vol}, timeout=1800)
 def package_decoder(ckpts: str = "r2_18000,r3l4_8000,r3l8_8000,aigc8_5000",
                      enhancer_path: str = "/data/enhancer_out_matched/enhancer_18000.pt"):
@@ -598,14 +636,66 @@ def package_decoder(ckpts: str = "r2_18000,r3l4_8000,r3l8_8000,aigc8_5000",
     shutil.copy(enhancer_path, dst / "enhancer.pt")
     shutil.copytree("/aeic/src", dst / "src", dirs_exist_ok=True)
 
+    (dst / "README.txt").write_text(f"""AEIC-based AIGC Image Compression Decoder — Team ZeroR
+LoViF 2026 AIGC Image Compression Challenge (Codabench comp 17125)
+
+CONTENTS
+  sd-turbo/unet, sd-turbo/vae  fp16 SD-Turbo UNet + VAE weights (base one-step diffusion decoder)
+  adcsr/halfDecoder.ckpt       AdcSR tiled-VAE decode module
+  aeic_ckpts/                  4 AEIC-ME fine-tuned checkpoints, one per rate tier:
+                                  {', '.join(ckpts.split(','))}
+  enhancer.pt                  post-decode residual enhancer (8-block RRDB-style CNN, zero extra bpp)
+  src/                         AEIC inference code (this challenge's fork of github.com/LuizScarlet/AEIC)
+
+HOW TO RUN
+  1. Environment: Python 3.10, torch 2.1.2+cu118, compressai==1.2.8, diffusers, xformers.
+     See src/requirements.txt (from upstream AEIC) for the full pin list.
+  2. Decode a directory of bitstreams (produced by our own encoder) straight to final PNGs,
+     enhancer included, no source/GT image needed:
+       python src/decode.py \\
+         --sd_path=./sd-turbo --vae_decoder_path=./adcsr/halfDecoder.ckpt \\
+         --ckpt_dir=./aeic_ckpts --enhancer_ckpt=./enhancer.pt \\
+         --bin_path=<bitstream_dir> --rec_path=<output_dir>
+     Each .bin file carries a 1-byte header identifying which of the 4 shipped checkpoints
+     encoded it (written by our encoder, src/refine.py --ckpt_id=<0-3>); decode.py reads that
+     byte and dispatches automatically, so no separate manifest is required.
+
+METHOD SUMMARY
+  Base codec: AEIC (CVPR 2026) one-step diffusion image codec, SD-Turbo decoder, ME variant.
+  Fine-tuned on train-800 + synthetic AIGC corpus (~15.7k images from SDXL/SD3.5/PixArt-Sigma/Sana,
+  prompts from GenEval/DPG-Bench/CVTG-2K/LongText-Bench) with LPIPS+DISTS surrogate loss at 4 rate tiers.
+  Encoder-side per-image test-time latent optimization (TTO): 300 Adam steps refining the AEIC latent
+  directly against the source image (frozen AR-entropy conditioning to keep gradients stable), before
+  final entropy coding. Encoder-side knapsack picks, per image, the checkpoint + TTO variant that
+  maximizes score under the global weighted-bpp budget (real rANS-coded bitstreams, not simulated).
+  Decoder-side: fixed small residual CNN enhancer trained on (AEIC reconstruction, GT) pairs from the
+  4 shipped checkpoints, applied identically post-decode — zero additional bits, ~+0.27 score/image.
+
+  Runtime: ~8.5s/image encode (TTO-dominated) on 1x A10G GPU; decode ~1-2s/image.
+  Training data: train-800 (provided) + synthetic AIGC corpus generated in-house from public prompt
+  sets (GenEval, DPG-Bench, CVTG-2K, LongText-Bench) using SDXL, SD3.5-medium, PixArt-Sigma, Sana.
+  No external pretrained weights beyond public SD-Turbo / AdcSR / AEIC base checkpoints.
+""")
+
     total = sum(f.stat().st_size for f in dst.rglob("*") if f.is_file())
     print(f"TOTAL PACKAGE SIZE: {total/1e9:.3f} GB")
     for sub in sorted(dst.iterdir()):
         if sub.is_dir():
             sz = sum(f.stat().st_size for f in sub.rglob("*") if f.is_file())
             print(f"  {sub.name}: {sz/1e9:.3f} GB")
+
+    zip_path = pathlib.Path("/data/submissions/decoder_package.zip")
+    zip_path.parent.mkdir(exist_ok=True)
+    if zip_path.exists():
+        zip_path.unlink()
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=1) as z:
+        for f in dst.rglob("*"):
+            if f.is_file():
+                z.write(f, f.relative_to(dst.parent))
+    zip_size = zip_path.stat().st_size
+    print(f"ZIP SIZE: {zip_size/1e9:.3f} GB -> {zip_path}")
     vol.commit()
-    return total
+    return {"unzipped_gb": total / 1e9, "zip_gb": zip_size / 1e9, "zip_path": str(zip_path)}
 
 
 @app.function(image=image, volumes={"/data": vol}, timeout=600)

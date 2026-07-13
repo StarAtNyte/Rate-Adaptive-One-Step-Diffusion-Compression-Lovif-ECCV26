@@ -133,3 +133,18 @@ Exact selection recovered a small free gain to 31.5645, but loss-weight calibrat
 
 ## Conclusion (07-13, cont.): search space re-confirmed exhausted
 Crop window (E54-57), loss-weight calibration (E60-61), and TTO seed diversity (E64) all closed negative/marginal. OSCAR rejected (E62). v17 (board 31.5270) remains the practical ceiling for this architecture. Remaining real lever is OneDC (blocked on manual OneDrive download) — user declined to pursue for now. Recommend locking in v17 and shifting effort to 07-18 decoder package deliverables (README, factsheet, submission email) unless a new idea surfaces.
+
+## Code-submission (07-18) prep: standalone decoder built and verified
+Caught and fixed a real gap: our submission uses 4 different AEIC checkpoints picked per-image by the
+knapsack, but the required test-phase bitstream naming (`bitstream/000001.bin`) has no room for a
+checkpoint tag — nothing in the submitted files told a decoder which of the 4 checkpoints to use.
+Fixed by writing a 1-byte checkpoint-id header into every bitstream (`refine.py --ckpt_id`, consumed by
+`decode_bitstream()`), and building `AEIC/src/decode.py`, a real standalone bitstream->PNG decoder with
+no source/GT dependency, that reads the header and dispatches automatically. Verified end-to-end on 2
+real val bitstreams via `decode_selfcheck()` — both decoded correctly with the right checkpoint dispatch.
+Also fixed `package_decoder()`, which was silently defaulting to the stale v11-era checkpoint set
+(`r2b_7000,...`) and the old `enhancer_out_v4` instead of v17's actual lineage (`r2_18000` swap,
+`enhancer_out_matched/enhancer_18000.pt`) — would have shipped the wrong decoder if uncaught.
+Real package size confirmed: 4.756GB (under the 5GB decoder cap). Note: the email attachment cap is
+separately **4GB** (per challenge details.md) — our package exceeds that, so it must go via a download
+link, not a direct attachment, when the code-submission email is sent.

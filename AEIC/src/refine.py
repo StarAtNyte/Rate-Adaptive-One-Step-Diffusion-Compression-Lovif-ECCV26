@@ -17,7 +17,7 @@ from torchvision import transforms
 
 from AEIC_practical import AEIC
 from codec.codec_practical import ste_round
-from my_utils.compress_utils import my_write_body, my_read_body, filesize, Path
+from my_utils.compress_utils import my_write_body, my_read_body, write_uchars, read_uchars, filesize, Path
 import lpips as lpips_pkg
 import pyiqa
 
@@ -107,8 +107,12 @@ def unet_fwd(net, x):
 
 
 def decode_bitstream(net, bin_path, name):
+    """Reads the 1-byte checkpoint-tag header (see write side in main()) then the body.
+    Caller is responsible for having loaded `net` with the checkpoint that byte identifies —
+    see CKPT_ID_TO_TAG in decode.py for the id<->checkpoint mapping."""
     output = os.path.join(bin_path, name)
     with Path(output).open("rb") as f:
+        read_uchars(f, 1)  # ckpt_id header, consumed by the caller before dispatch
         strings, shape = my_read_body(f)
     ori_h, ori_w = shape
     padded_y_h = math.ceil(ori_h / 64) * 2
@@ -151,6 +155,8 @@ def main():
     ap.add_argument("--text_bias", type=float, default=0.7, help="fraction of iters that sample a text-box crop when available")
     ap.add_argument("--text_dists_w", type=float, default=3.0, help="extra DISTS weight multiplier on text crops")
     ap.add_argument("--seed", type=int, default=0, help="RNG seed for per-iteration crop sampling")
+    ap.add_argument("--ckpt_id", type=int, default=0, help="1-byte tag written into the bitstream header so a "
+                     "standalone decoder can tell which of the shipped checkpoints to load (see decode.py)")
     args = ap.parse_args()
 
     text_boxes_all = {}
@@ -248,6 +254,7 @@ def main():
             strings = net.codec.entropy_coder.get_encoded_stream()
             outb = os.path.join(args.bin_path, name)
             with Path(outb).open("wb") as f:
+                write_uchars(f, [args.ckpt_id])
                 my_write_body(f, [ori_h, ori_w], strings)
             out_img = decode_bitstream(net, args.bin_path, name)
             bpp_real = filesize(outb) * 8 / (ori_h * ori_w)
