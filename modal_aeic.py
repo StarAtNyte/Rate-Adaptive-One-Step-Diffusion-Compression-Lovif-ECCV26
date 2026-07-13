@@ -568,13 +568,15 @@ def adcsr_size():
 
 
 @app.function(image=image, volumes={"/data": vol}, timeout=1800)
-def package_decoder(ckpts: str = "r2b_7000,r3l4_8000,r3l8_8000,aigc8_5000"):
+def package_decoder(ckpts: str = "r2_18000,r3l4_8000,r3l8_8000,aigc8_5000",
+                     enhancer_path: str = "/data/enhancer_out_matched/enhancer_18000.pt"):
     """Assemble the shippable decoder: trimmed SD-Turbo (fp16, unet+vae only), AdcSR halfDecoder,
     4 AEIC checkpoints, enhancer weights, AEIC/src code."""
     import pathlib, shutil, zipfile
     ckpt_paths = {
         "r2b_7000": "AEIC_r2b_2_7000.pkl", "r3l4_8000": "AEIC_r3l4_4_8000.pkl",
         "r3l8_8000": "AEIC_r3l8_8_8000.pkl", "aigc8_5000": "AEIC_ME_aigc88_5000.pkl",
+        "r2_18000": "AEIC_r2_4_18000.pkl",
     }
     dst = pathlib.Path("/data/decoder_package")
     shutil.rmtree(dst, ignore_errors=True)
@@ -593,7 +595,7 @@ def package_decoder(ckpts: str = "r2b_7000,r3l4_8000,r3l8_8000,aigc8_5000"):
         fname = ckpt_paths[tag]
         src = pathlib.Path(f"/data/ft_out/checkpoints/{fname}") if not (pathlib.Path(f"{W}/aeic_ckpts/{fname}")).exists() else pathlib.Path(f"{W}/aeic_ckpts/{fname}")
         shutil.copy(src, dst / "aeic_ckpts" / fname)
-    shutil.copy("/data/enhancer_out_v4/enhancer_10000.pt", dst / "enhancer.pt")
+    shutil.copy(enhancer_path, dst / "enhancer.pt")
     shutil.copytree("/aeic/src", dst / "src", dirs_exist_ok=True)
 
     total = sum(f.stat().st_size for f in dst.rglob("*") if f.is_file())
