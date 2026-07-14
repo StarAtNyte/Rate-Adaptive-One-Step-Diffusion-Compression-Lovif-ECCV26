@@ -148,3 +148,23 @@ Also fixed `package_decoder()`, which was silently defaulting to the stale v11-e
 Real package size confirmed: 4.756GB (under the 5GB decoder cap). Note: the email attachment cap is
 separately **4GB** (per challenge details.md) — our package exceeds that, so it must go via a download
 link, not a direct attachment, when the code-submission email is sent.
+
+## Research notes (OneDC evaluation, pursued 07-14 -- rejected)
+Downloaded OneDC (NeurIPS 2025) weights (exlow_bpp0034 ultra-low-bitrate model + VQGAN tokenizer, user
+manually pulled from OneDrive after the 403/JS-folder block). Built a separate torch 2.5 Modal image
+(modal_onedc.py, OneDC_code/ vendored from github.com/onedc-codec/onedc), compiled their rANS entropy
+coder, worked around a gated-repo blocker (stabilityai/stable-diffusion-2-1 now requires auth; patched
+to the public sd2-community/stable-diffusion-2-1 mirror), worked around A10G OOM on full-res 2K images
+(no tiled decode in OneDC's VAE path, unlike AEIC -- tested on the sub-1K-pixel val images only).
+
+Found the same defect that killed OSCAR (E62): the z_only ultra-low-bitrate inference path computes
+`bpp = patches * 14 bits` (fixed-length VQ-index count) rather than invoking their own compiled rANS
+coder -- no real serialized bitstream, would need real entropy/fixed-length packing built before this
+could be submission-legal.
+
+Quality screen (6 sub-1K val images, real GT comparison): mean score **~82.16 @ 0.0034 bpp** (PSNR
+16-20, LPIPS 0.24-0.40, DISTS 0.13-0.23) -- dramatically worse than AEIC's 111.5 @ 0.025 bpp, despite
+using ~7x fewer bits. Gap too large to plausibly close by testing the higher-rate lambda checkpoints
+(each a separate 4.58GB single-rate download with the same bitstream-realism gap to fix first).
+**Rejected.** No remaining untested codec-family lever; v17 (board 31.5270) stands as the practical
+ceiling for this architecture.
