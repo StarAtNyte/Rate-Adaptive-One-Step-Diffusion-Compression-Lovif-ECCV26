@@ -299,7 +299,8 @@ CKPT_PATHS = {
 @app.function(image=image, volumes={"/data": vol}, gpu=GPU, timeout=43200)
 def refine(plan_json: str, split: str = "val", iters: int = 60, only_tag: str = "", shard: int = 0, nshards: int = 1, lr: float = 1e-3, out_dir: str = "refined",
            text_boxes_path: str = "", text_bias: float = 0.7, text_dists_w: float = 3.0, only_with_text: bool = False,
-           rate_w: float = 20000.0, mse_w: float = 1000.0, dists_w: float = 40.0, crop_ly: int = 16, seed: int = 0):
+           rate_w: float = 20000.0, mse_w: float = 1000.0, dists_w: float = 40.0, crop_ly: int = 16, seed: int = 0,
+           enhancer_ckpt: str = ""):
     """Run latent TTO per image with the checkpoint chosen by the knapsack plan."""
     import json, pathlib, subprocess, sys
     plan = json.loads(plan_json)
@@ -338,6 +339,8 @@ def refine(plan_json: str, split: str = "val", iters: int = 60, only_tag: str = 
             f"--seed={seed}",
             f"--ckpt_id={ckpt_id}",
         ]
+        if enhancer_ckpt:
+            cmd.append(f"--enhancer_ckpt={enhancer_ckpt}")
         if text_boxes_path:
             cmd += [f"--text_boxes_json={text_boxes_path}", f"--text_bias={text_bias}", f"--text_dists_w={text_dists_w}"]
         r = subprocess.Popen(cmd, cwd="/aeic/src")

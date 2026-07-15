@@ -168,3 +168,5 @@ using ~7x fewer bits. Gap too large to plausibly close by testing the higher-rat
 (each a separate 4.58GB single-rate download with the same bitstream-realism gap to fix first).
 **Rejected.** No remaining untested codec-family lever; v17 (board 31.5270) stands as the practical
 ceiling for this architecture.
+
+| E65 | 07-15 | Downsample-encode + SR-decode screen for the 2K tier (6 imgs, LANCZOS 2x down, r2b_7000 encode, Real-ESRGAN x2plus up, scored vs full-res GT at source-pixel bpp) | **96.61 @ 0.0140** vs same-image v17 baseline **108.13 @ 0.0221** — saves 0.008 bpp, loses 11.5 pts; LPIPS 0.247 vs 0.09 (SR hallucination punished by reference metrics) | decisively negative, closed. modal_sr.py kept for reference |

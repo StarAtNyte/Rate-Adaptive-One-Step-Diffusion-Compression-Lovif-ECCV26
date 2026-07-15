@@ -157,6 +157,8 @@ def main():
     ap.add_argument("--seed", type=int, default=0, help="RNG seed for per-iteration crop sampling")
     ap.add_argument("--ckpt_id", type=int, default=0, help="1-byte tag written into the bitstream header so a "
                      "standalone decoder can tell which of the shipped checkpoints to load (see decode.py)")
+    ap.add_argument("--enhancer_ckpt", default="", help="if set, apply this frozen post-decode enhancer inside the "
+                     "TTO loss chain so the latent is optimized for the actually-scored output")
     args = ap.parse_args()
 
     text_boxes_all = {}
@@ -172,6 +174,14 @@ def main():
     lpips_loss = lpips_pkg.LPIPS(net='alex').cuda()
     lpips_loss.requires_grad_(False)
     dists_loss = pyiqa.create_metric("dists", device="cuda", as_loss=True)
+
+    enhancer = None
+    if args.enhancer_ckpt:
+        from enhancer import Enhancer
+        enhancer = Enhancer().cuda().eval()
+        enhancer.load_state_dict(torch.load(args.enhancer_ckpt, map_location="cuda"))
+        enhancer.requires_grad_(False)
+        print("[TTO-through-enhancer] loaded", args.enhancer_ckpt, flush=True)
 
     tf = transforms.Compose([transforms.ToTensor(),
                              transforms.Normalize([0.5] * 3, [0.5] * 3)])
@@ -234,6 +244,9 @@ def main():
             xc_hat = xc_hat[:, :, ta:ta + LY * 32, tb:tb + LY * 32]
             xc = x[:, :, a * 32:(a + LY) * 32, b * 32:(b + LY) * 32]
             x01, xh01 = xc * 0.5 + 0.5, xc_hat * 0.5 + 0.5
+            if enhancer is not None:
+                xh01 = enhancer(xh01).clamp(0, 1)
+                xc_hat = xh01 * 2 - 1
             mse = F.mse_loss(xh01, x01)
             lp = lpips_loss(xc_hat, xc).mean()
             dt = dists_loss(xh01, x01).mean()
