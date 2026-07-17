@@ -159,6 +159,8 @@ def main():
                      "standalone decoder can tell which of the shipped checkpoints to load (see decode.py)")
     ap.add_argument("--enhancer_ckpt", default="", help="if set, apply this frozen post-decode enhancer inside the "
                      "TTO loss chain so the latent is optimized for the actually-scored output")
+    ap.add_argument("--refreeze_every", type=int, default=0, help="if >0, re-derive the frozen entropy conditioning "
+                     "from the CURRENT latent every N iters (stale-conditioning refresh); 0 = classic single freeze")
     args = ap.parse_args()
 
     text_boxes_all = {}
@@ -216,6 +218,9 @@ def main():
 
         for it in range(args.iters):
           if True:
+            if args.refreeze_every and it > 0 and it % args.refreeze_every == 0:
+                with torch.no_grad():
+                    frozen = get_frozen(net.codec, y.detach(), x)
             y_hat, bpp = forward_frozen(net.codec, y, frozen)
             is_text_iter = bool(img_boxes) and rng.random() < args.text_bias
             if is_text_iter:

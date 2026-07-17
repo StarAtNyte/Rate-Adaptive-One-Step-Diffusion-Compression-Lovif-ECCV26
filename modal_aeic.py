@@ -300,7 +300,7 @@ CKPT_PATHS = {
 def refine(plan_json: str, split: str = "val", iters: int = 60, only_tag: str = "", shard: int = 0, nshards: int = 1, lr: float = 1e-3, out_dir: str = "refined",
            text_boxes_path: str = "", text_bias: float = 0.7, text_dists_w: float = 3.0, only_with_text: bool = False,
            rate_w: float = 20000.0, mse_w: float = 1000.0, dists_w: float = 40.0, crop_ly: int = 16, seed: int = 0,
-           enhancer_ckpt: str = ""):
+           enhancer_ckpt: str = "", refreeze_every: int = 0):
     """Run latent TTO per image with the checkpoint chosen by the knapsack plan."""
     import json, pathlib, subprocess, sys
     plan = json.loads(plan_json)
@@ -341,6 +341,8 @@ def refine(plan_json: str, split: str = "val", iters: int = 60, only_tag: str = 
         ]
         if enhancer_ckpt:
             cmd.append(f"--enhancer_ckpt={enhancer_ckpt}")
+        if refreeze_every:
+            cmd.append(f"--refreeze_every={refreeze_every}")
         if text_boxes_path:
             cmd += [f"--text_boxes_json={text_boxes_path}", f"--text_bias={text_bias}", f"--text_dists_w={text_dists_w}"]
         r = subprocess.Popen(cmd, cwd="/aeic/src")
@@ -699,6 +701,37 @@ METHOD SUMMARY
     print(f"ZIP SIZE: {zip_size/1e9:.3f} GB -> {zip_path}")
     vol.commit()
     return {"unzipped_gb": total / 1e9, "zip_gb": zip_size / 1e9, "zip_path": str(zip_path)}
+
+
+@app.function(image=image, volumes={"/data": vol}, timeout=900)
+def make_soup(ckpt_a: str = "AEIC_r2_4_18000.pkl", ckpt_b: str = "AEIC_r3l4_4_8000.pkl",
+              alpha: float = 0.5, out_name: str = "AEIC_soup_r2r3l4.pkl"):
+    """Weight-average two same-lineage checkpoints (model soup). alpha = weight on ckpt_a."""
+    import torch, pathlib
+    def load(name):
+        p = pathlib.Path(f"/data/ft_out/checkpoints/{name}")
+        if not p.exists():
+            p = pathlib.Path(f"{W}/aeic_ckpts/{name}")
+        return torch.load(p, map_location="cpu")
+    a, b = load(ckpt_a), load(ckpt_b)
+    out = {}
+    for k in a:
+        if isinstance(a[k], dict) and k in b:
+            merged = {}
+            for t in a[k]:
+                va = a[k][t]
+                if hasattr(va, "dtype") and t in b[k] and va.dtype.is_floating_point:
+                    merged[t] = alpha * va + (1 - alpha) * b[k][t]
+                else:
+                    merged[t] = va
+            out[k] = merged
+        else:
+            out[k] = a[k]
+    dst = pathlib.Path(f"/data/ft_out/checkpoints/{out_name}")
+    torch.save(out, dst)
+    print("saved", dst)
+    vol.commit()
+    return str(dst)
 
 
 @app.function(image=image, volumes={"/data": vol}, timeout=600)
