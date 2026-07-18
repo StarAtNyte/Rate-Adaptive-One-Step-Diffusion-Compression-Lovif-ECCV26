@@ -175,3 +175,7 @@ ceiling for this architecture.
 
 | E68 | 07-17 | Conditioning-refresh TTO (--refreeze_every 75: re-derive frozen entropy conditioning from current latent every 75 iters), 8-img screen vs single-freeze | 6/8 improve (+0.10..+0.32), one outlier −1.02, mean −0.003 as replacement — but as an ADDED knapsack candidate losers are discarded: E[max(0,Δ)] ≈ +0.12/img | full 100-img run launched (pkgset_v6_refreeze) — last score experiment before package freeze |
 | E69 | 07-17 | Model soup: 0.5·r2_18000 + 0.5·r3l4_8000 weight average, full-val encode | 112.1297 @ 0.0371 vs parents 112.1812/112.2216 — worse than both | negative, closed |
+
+| E70 | 07-18 | E68 full run scored: refreeze TTO (100 imgs) + champion enhancer | **111.6717 @ 0.03101** vs v3_long's 111.5264 @ 0.03115 — **+0.145 raw at same bits** | biggest lever since 300-iter TTO |
+| E71 | 07-18 | E67 verdict: TTO-pair enhancer (3k fine-tune steps) on v3_long | 111.518 vs champion's 111.5264 | negative — champion enhancer stays, decoder package unchanged |
+| E72 | 07-18 | Exact MILP remix incl. refreeze candidate → **v20, submission_v20_refreeze.zip** | **111.6632 @ w-bpp 0.024990**, refreeze wins 72/100 | board est **31.6632** (+0.136 over v17). Awaiting board confirmation |
