@@ -181,3 +181,5 @@ ceiling for this architecture.
 | E72 | 07-18 | Exact MILP remix incl. refreeze candidate → **v20, submission_v20_refreeze.zip** | **111.6632 @ w-bpp 0.024990**, refreeze wins 72/100 | board est **31.6632** (+0.136 over v17). Awaiting board confirmation |
 
 | E73 | 07-18 | **v20 board confirmed: 31.6632** — exact MILP prediction again (5/5 exact) | Leaderboard shifted hard on 07-17: three new entries above UnoChen — evolve 34.50 (PSNR 29.5, 0.45s), rrrrty 33.72 (25s/img, TTO-like), ashes 33.69 (PSNR-heavy, worse DISTS than ours). "anish 40.8" fake now REMOVED from board (organizer cull — validates honest-path strategy). We are rank 5. | v20 = new best. Gap to podium ~2.0 — not closable by tuning; decision point: ship decoder + fight in test phase where fakes die and only real decoders count |
+
+| E74 | 07-18 | Refreeze depth sweep, 8-img screens vs refreeze75@300: (a) refreeze75 @ **500 iters**, (b) refreeze**25** @ 300 | (a) **+0.44/img, 8/8 positive** (old −1.02 outlier now +1.10), bpp +0.0005; (b) +0.12/img | **stale conditioning WAS the depth bottleneck — curve re-opened.** Full 100-img rf500 run launched (pkgset_v7_rf500) + 800-iter screen queued |
