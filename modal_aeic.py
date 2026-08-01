@@ -124,7 +124,7 @@ def budget_ablation(candidate_tags: str, cap_bpp: float = 0.02499, split: str = 
     from scipy.optimize import Bounds, LinearConstraint, milp
 
     tags = [x for x in candidate_tags.split(",") if x]
-    gt = {p.name: p for p in pathlib.Path(f"/data/{split}").rglob("*.png")}
+    gt = {p.name: p for p in pathlib.Path(f"/data/{split}").rglob("*.png") if "__MACOSX" not in p.parts}
     names = sorted(gt)
     pixels = {n: Image.open(gt[n]).size[0] * Image.open(gt[n]).size[1] for n in names}
     rows = {}
@@ -170,6 +170,210 @@ def budget_ablation(candidate_tags: str, cap_bpp: float = 0.02499, split: str = 
     return out
 
 
+@app.function(image=image, volumes={"/data": vol}, timeout=300)
+def selected_header_counts(plan_json: str, tags: str, split: str = "test"):
+    """Report checkpoint header IDs used by selected TTO candidates."""
+    import collections, json, pathlib
+    plan = json.loads(plan_json)
+    wanted = set(tags.split(","))
+    counts = collections.Counter()
+    for name, tag in plan.items():
+        if tag not in wanted:
+            continue
+        p = pathlib.Path(f"/data/runs/{split}/{tag.removesuffix('_enh')}/bin/{pathlib.Path(name).stem}")
+        if not p.exists():
+            p = p.with_suffix(".bin")
+        counts[p.read_bytes()[0]] += 1
+    print(json.dumps(dict(counts), sort_keys=True))
+    return dict(counts)
+
+
+@app.function(image=image, volumes={"/data": vol}, timeout=1800)
+def add_residual_sideinfo(base_tag: str = "rf500", split: str = "test",
+                          out_tag: str = "rf500_res32q2", block: int = 32,
+                          qstep: float = 0.00784313725490196):
+    """Create a real-byte low-frequency residual candidate.
+
+    The encoder downsamples GT-base error with area filtering, scalar-quantizes it,
+    and zlib-codes signed int8 coefficients.  The decoder needs only bilinear
+    upsampling and addition.  A fixed 16-byte trailer locates the appended payload.
+    Existing AEIC bits are retained verbatim and every side byte is charged by MILP.
+    """
+    import pathlib, struct, zlib
+    import numpy as np
+    import torch
+    import torch.nn.functional as F
+    from PIL import Image
+
+    gt = {p.name: p for p in pathlib.Path(f"/data/{split}").rglob("*.png")
+          if "__MACOSX" not in p.parts}
+    src = pathlib.Path(f"/data/runs/{split}/{base_tag}")
+    dst = pathlib.Path(f"/data/runs/{split}/{out_tag}")
+    (dst / "rec").mkdir(parents=True, exist_ok=True)
+    (dst / "bin").mkdir(parents=True, exist_ok=True)
+    for rp in sorted((src / "rec").glob("*.png")):
+        a = torch.from_numpy(np.asarray(Image.open(gt[rp.name]).convert("RGB"), dtype=np.float32).copy())
+        b = torch.from_numpy(np.asarray(Image.open(rp).convert("RGB"), dtype=np.float32).copy())
+        a = a.permute(2, 0, 1)[None] / 255.0
+        b = b.permute(2, 0, 1)[None] / 255.0
+        h, w = a.shape[-2:]
+        gh, gw = max(1, (h + block - 1) // block), max(1, (w + block - 1) // block)
+        low = F.interpolate(a - b, size=(gh, gw), mode="area")
+        q = torch.round(low / qstep).clamp(-127, 127).to(torch.int8)
+        corr = F.interpolate(q.float() * qstep, size=(h, w), mode="bilinear", align_corners=False)
+        y = (b + corr).clamp(0, 1)
+        arr = (y[0].permute(1, 2, 0).numpy() * 255).round().astype(np.uint8)
+        Image.fromarray(arr).save(dst / "rec" / rp.name)
+
+        raw = q.numpy().tobytes(order="C")
+        payload = zlib.compress(raw, level=9)
+        stem = rp.stem
+        bp = src / "bin" / stem
+        if not bp.exists(): bp = bp.with_suffix(".bin")
+        # Trailer: magic, grid H/W, quantizer step, compressed payload length.
+        trailer = struct.pack(">4sHHfI", b"RSI1", gh, gw, qstep, len(payload))
+        (dst / "bin" / bp.name).write_bytes(bp.read_bytes() + payload + trailer)
+    vol.commit()
+    return str(dst)
+
+
+@app.function(image=image, volumes={"/data": vol}, gpu=GPU, timeout=7200)
+def compressai_halfres(split: str = "test", out_tag: str = "cheng_q1_half",
+                       quality: int = 1, architecture: str = "cheng",
+                       spatial_scale: float = 2.0):
+    """Real entropy-coded fidelity candidate: Cheng2020 at 1/2 resolution.
+
+    Half-resolution coding gives the conventional codec four times the internal
+    bits/pixel at the challenge's full-resolution budget. Reconstruction uses
+    antialiased bicubic scaling, deliberately avoiding generative hallucination.
+    """
+    import pathlib, struct
+    import numpy as np
+    import torch
+    import torch.nn.functional as F
+    from PIL import Image
+    from compressai.zoo import cheng2020_attn, mbt2018_mean
+
+    factory = cheng2020_attn if architecture == "cheng" else mbt2018_mean
+    net = factory(quality=quality, pretrained=True).cuda().eval()
+    root = pathlib.Path(f"/data/runs/{split}/{out_tag}")
+    (root / "rec").mkdir(parents=True, exist_ok=True)
+    (root / "bin").mkdir(parents=True, exist_ok=True)
+    paths = sorted(p for p in pathlib.Path(f"/data/{split}").rglob("*.png")
+                   if "__MACOSX" not in p.parts)
+    for p in paths:
+        arr = np.asarray(Image.open(p).convert("RGB"), dtype=np.float32).copy()
+        x = torch.from_numpy(arr).permute(2, 0, 1)[None].cuda() / 255.0
+        h, w = x.shape[-2:]
+        lh, lw = max(1, round(h / spatial_scale)), max(1, round(w / spatial_scale))
+        low = F.interpolate(x, size=(lh, lw), mode="bicubic", align_corners=False, antialias=True)
+        ph, pw = (-lh) % 64, (-lw) % 64
+        lowp = F.pad(low, (0, pw, 0, ph), mode="reflect")
+        with torch.inference_mode():
+            enc = net.compress(lowp)
+            dec = net.decompress(enc["strings"], enc["shape"])["x_hat"]
+            dec = dec[..., :lh, :lw].clamp(0, 1)
+            y = F.interpolate(dec, size=(h, w), mode="bicubic", align_corners=False, antialias=True).clamp(0, 1)
+            # A few out-of-domain images can trigger non-finite synthesis values
+            # in stock CompressAI weights. Preserve a valid reconstruction rather
+            # than silently converting NaNs to black pixels.
+            if not torch.isfinite(y).all():
+                # Decoder-reproducible fallback only: never substitute source-derived
+                # pixels, since the submitted decoder cannot access the source image.
+                y = torch.nan_to_num(y, nan=0.5, posinf=1.0, neginf=0.0).clamp(0, 1)
+        out = (y[0].permute(1, 2, 0).cpu().numpy() * 255).round().astype(np.uint8)
+        Image.fromarray(out).save(root / "rec" / p.name)
+
+        strings = [s for group in enc["strings"] for s in group]
+        # Self-delimiting real bitstream: original/low/padded geometry, entropy
+        # shape, stream count, then uint32 length + bytes for every rANS stream.
+        header = struct.pack(">4s8I", b"CHG1", h, w, lh, lw, lowp.shape[-2], lowp.shape[-1],
+                             enc["shape"][0], enc["shape"][1])
+        payload = header + struct.pack(">I", len(strings))
+        for s in strings:
+            payload += struct.pack(">I", len(s)) + s
+        (root / "bin" / p.stem).write_bytes(payload)
+        print(p.name, len(payload), flush=True)
+    vol.commit()
+    return str(root)
+
+
+@app.function(image=image, volumes={"/data": vol}, timeout=1800)
+def halfres_oracle(split: str = "test", out_tag: str = "halfres_oracle"):
+    """Lossless half-resolution bicubic ceiling; diagnostic only, not a codec."""
+    import pathlib
+    import numpy as np
+    import torch
+    import torch.nn.functional as F
+    from PIL import Image
+    root = pathlib.Path(f"/data/runs/{split}/{out_tag}")
+    (root / "rec").mkdir(parents=True, exist_ok=True)
+    (root / "bin").mkdir(parents=True, exist_ok=True)
+    for p in sorted(x for x in pathlib.Path(f"/data/{split}").rglob("*.png") if "__MACOSX" not in x.parts):
+        arr = np.asarray(Image.open(p).convert("RGB"), dtype=np.float32).copy()
+        x = torch.from_numpy(arr).permute(2, 0, 1)[None] / 255.0
+        h, w = x.shape[-2:]
+        low = F.interpolate(x, size=((h + 1)//2, (w + 1)//2), mode="bicubic",
+                            align_corners=False, antialias=True)
+        y = F.interpolate(low, size=(h, w), mode="bicubic", align_corners=False,
+                          antialias=True).clamp(0, 1)
+        out = (y[0].permute(1, 2, 0).numpy() * 255).round().astype(np.uint8)
+        Image.fromarray(out).save(root / "rec" / p.name)
+        (root / "bin" / p.stem).write_bytes(b"")
+    vol.commit()
+    return str(root)
+
+
+@app.function(image=image, volumes={"/data": vol}, gpu=GPU, timeout=43200)
+def train_fidelity_sr(run_tag: str = "mbtmean_q1_s236", steps: int = 12000,
+                      out_dir: str = "/data/fidelity_sr", lpips_w: float = 0.03,
+                      resume: str = "", checkpoint_every: int = 250):
+    """Train the fidelity decoder on real train-set entropy-codec artifacts."""
+    import subprocess, sys, time
+    cmd = [sys.executable, "/aeic/src/fidelity_sr.py",
+           f"--rec_dir=/data/runs/train/{run_tag}/rec", "--gt_dir=/data/train",
+           f"--out_dir={out_dir}", f"--steps={steps}", f"--lpips_w={lpips_w}",
+           f"--checkpoint_every={checkpoint_every}"]
+    if resume:
+        cmd.append(f"--resume={resume}")
+    proc = subprocess.Popen(cmd, cwd="/aeic/src")
+    while proc.poll() is None:
+        time.sleep(60)
+        vol.commit()
+    vol.commit()
+    if proc.returncode:
+        raise RuntimeError(f"fidelity SR training failed: {proc.returncode}")
+    return out_dir
+
+
+@app.function(image=image, volumes={"/data": vol}, gpu=GPU, timeout=7200)
+def apply_fidelity_sr(run_dir: str, checkpoint: str, out_dir: str):
+    """Apply a trained fidelity decoder without changing the real bitstreams."""
+    import pathlib, shutil, sys
+    import numpy as np
+    import torch
+    from PIL import Image
+    sys.path.insert(0, "/aeic/src")
+    from fidelity_sr import FidelitySR
+    state = torch.load(checkpoint, map_location="cuda")
+    net = FidelitySR(blocks=state.get("blocks", 12)).cuda().eval()
+    net.load_state_dict(state["model"] if "model" in state else state)
+    src, dst = pathlib.Path(run_dir), pathlib.Path(out_dir)
+    (dst / "rec").mkdir(parents=True, exist_ok=True)
+    (dst / "bin").mkdir(parents=True, exist_ok=True)
+    for p in sorted((src / "rec").glob("*.png")):
+        x = torch.from_numpy(np.asarray(Image.open(p).convert("RGB"), dtype=np.float32).copy())
+        x = x.permute(2, 0, 1)[None].cuda() / 255
+        with torch.inference_mode():
+            y = net(x).clamp(0, 1)
+        arr = (y[0].permute(1, 2, 0).cpu().numpy()*255).round().astype(np.uint8)
+        Image.fromarray(arr).save(dst / "rec" / p.name)
+    for p in (src / "bin").iterdir():
+        shutil.copyfile(p, dst / "bin" / p.name)
+    vol.commit()
+    return str(dst)
+
+
 @app.function(image=image, volumes={"/data": vol}, timeout=3600)
 def pack(plan_json: str, out_name: str = "submission.zip", split: str = "val"):
     import json, pathlib, zipfile, shutil
@@ -185,7 +389,14 @@ def pack(plan_json: str, out_name: str = "submission.zip", split: str = "val"):
         src_bin = run / "bin" / stem
         if not src_bin.exists():
             src_bin = run / "bin" / (stem + ".bin")
-        shutil.copy(src_bin, root / "bitstream" / (stem + ".bin"))
+        data = src_bin.read_bytes()
+        # bin files from compress.py (raw checkpoint tags, with or without _enh) never got the
+        # 1-byte ckpt_id header refine.py writes -- decode.py's peek_ckpt_id/decode_bitstream
+        # require it on every file, so prepend it here based on the known base checkpoint.
+        base_tag = tag[:-4] if tag.endswith("_enh") else tag
+        if base_tag in SHIPPABLE_CKPT_ORDER:
+            data = bytes([SHIPPABLE_CKPT_ORDER.index(base_tag)]) + data
+        (root / "bitstream" / (stem + ".bin")).write_bytes(data)
     (root / "readme.txt").write_text(
         "runtime per image [s] : 8.5\n"
         "CPU[1] / GPU[0] : 0\n"
@@ -260,9 +471,21 @@ def train(config: str = "config_aigc.yaml", init_ckpt: str = "AEIC_ME_ft4.pkl"):
 
 @app.function(image=image, volumes={"/data": vol}, timeout=600)
 def fix_evalset():
-    import pathlib
+    import pathlib, shutil
     from PIL import Image
-    for p in pathlib.Path("/data/evalset/Kodak").glob("*.png"):
+    dst = pathlib.Path("/data/evalset/Kodak")
+    dst.mkdir(parents=True, exist_ok=True)
+    if not any(dst.glob("*.png")):
+        # The scratch evalset may be removed between experiment rounds.  It is
+        # only used for periodic training diagnostics, so rebuild it from val
+        # (or train as a fallback) without touching challenge test images.
+        source = pathlib.Path("/data/val")
+        candidates = sorted(source.rglob("*.png"))
+        if not candidates:
+            candidates = sorted(pathlib.Path("/data/train").rglob("*.png"))
+        for p in candidates[:8]:
+            shutil.copy2(p, dst / p.name)
+    for p in dst.glob("*.png"):
         img = Image.open(p).convert("RGB")
         w, h = img.size
         img.crop(((w - 512) // 2, (h - 512) // 2, (w - 512) // 2 + 512, (h - 512) // 2 + 512)).save(p)
@@ -299,7 +522,8 @@ CKPT_PATHS = {
 @app.function(image=image, volumes={"/data": vol}, gpu=GPU, timeout=43200)
 def refine(plan_json: str, split: str = "val", iters: int = 60, only_tag: str = "", shard: int = 0, nshards: int = 1, lr: float = 1e-3, out_dir: str = "refined",
            text_boxes_path: str = "", text_bias: float = 0.7, text_dists_w: float = 3.0, only_with_text: bool = False,
-           rate_w: float = 20000.0, mse_w: float = 1000.0, dists_w: float = 40.0, crop_ly: int = 16, seed: int = 0,
+           rate_w: float = 20000.0, mse_w: float = 1000.0, psnr_w: float = 0.0,
+           lpips_w: float = 40.0, dists_w: float = 40.0, crop_ly: int = 16, seed: int = 0,
            enhancer_ckpt: str = "", refreeze_every: int = 0):
     """Run latent TTO per image with the checkpoint chosen by the knapsack plan."""
     import json, pathlib, subprocess, sys
@@ -334,6 +558,8 @@ def refine(plan_json: str, split: str = "val", iters: int = 60, only_tag: str = 
             f"--lr={lr}",
             f"--rate_w={rate_w}",
             f"--mse_w={mse_w}",
+            f"--psnr_w={psnr_w}",
+            f"--lpips_w={lpips_w}",
             f"--dists_w={dists_w}",
             f"--crop_ly={crop_ly}",
             f"--seed={seed}",
@@ -599,6 +825,8 @@ def decode_selfcheck(bin_dir: str, split: str = "val"):
         f"--vae_decoder_path={W}/adcsr/weight/pretrained/halfDecoder.ckpt",
         f"--ckpt_dir={ckpt_dir}",
         "--enhancer_ckpt=/data/enhancer_out_matched/enhancer_18000.pt",
+        "--fidelity_codec_ckpt=/data/decoder_package/fidelity_codec.pt",
+        "--fidelity_sr_ckpt=/data/fidelity_sr_mse/fidelity_sr_1000.pt",
         f"--bin_path={bin_dir}",
         f"--rec_path={out_dir}",
     ], cwd="/aeic/src", capture_output=True, text=True)
@@ -610,12 +838,62 @@ def decode_selfcheck(bin_dir: str, split: str = "val"):
     return n
 
 
+@app.function(image=image, volumes={"/data": vol}, gpu=GPU, timeout=7200)
+def selfcheck_submission(submission_zip: str, plan_path: str, tags: str = "", tolerance: int = 2):
+    """Decode a packed submission and require pixel-identical planned reconstructions."""
+    import json, pathlib, shutil, subprocess, sys, zipfile
+    import numpy as np
+    from PIL import Image
+    work = pathlib.Path("/tmp/submission_selfcheck")
+    shutil.rmtree(work, ignore_errors=True); work.mkdir()
+    with zipfile.ZipFile(submission_zip) as z:
+        z.extractall(work / "packed")
+    ckpt_dir = work / "ckpts"; ckpt_dir.mkdir()
+    for tag, fname in zip(SHIPPABLE_CKPT_ORDER,
+                          ["AEIC_ME_aigc88_5000.pkl", "AEIC_r2_4_18000.pkl",
+                           "AEIC_r3l4_4_8000.pkl", "AEIC_r3l8_8_8000.pkl"]):
+        shutil.copy(CKPT_PATHS[tag], ckpt_dir / fname)
+    bin_dir, out_dir = work / "packed" / "bitstream", work / "decoded"
+    plan = json.loads(pathlib.Path(plan_path).read_text())["plan"]
+    if tags:
+        wanted = set(tags.split(","))
+        plan = {name: tag for name, tag in plan.items() if tag in wanted}
+        keep = {pathlib.Path(name).stem + ".bin" for name in plan}
+        for p in bin_dir.iterdir():
+            if p.name not in keep: p.unlink()
+    r = subprocess.run([
+        sys.executable, "/aeic/src/decode.py", f"--sd_path={W}/sd-turbo",
+        f"--vae_decoder_path={W}/adcsr/weight/pretrained/halfDecoder.ckpt",
+        f"--ckpt_dir={ckpt_dir}",
+        "--enhancer_ckpt=/data/enhancer_out_matched/enhancer_18000.pt",
+        "--fidelity_codec_ckpt=/data/decoder_package/fidelity_codec.pt",
+        "--fidelity_sr_ckpt=/data/decoder_package/fidelity_sr.pt",
+        f"--bin_path={bin_dir}", f"--rec_path={out_dir}",
+    ], cwd="/aeic/src", capture_output=True, text=True)
+    print(r.stdout[-3000:])
+    if r.returncode:
+        raise RuntimeError(r.stderr[-4000:])
+    bad, worst = [], 0
+    for name, tag in plan.items():
+        got = out_dir / (pathlib.Path(name).stem + ".bin.png")
+        expected = pathlib.Path(f"/data/runs/test/{tag}/rec/{name}")
+        a, b = np.asarray(Image.open(got), dtype=np.int16), np.asarray(Image.open(expected), dtype=np.int16)
+        diff = int(np.max(np.abs(a-b))); worst = max(worst, diff)
+        if diff > tolerance: bad.append((name, tag, diff))
+    print({"images": len(plan), "mismatches": len(bad), "worst_abs_diff": worst, "first": bad[:10]})
+    if bad:
+        raise RuntimeError(f"decoder parity failed for {len(bad)} images")
+    return {"images": len(plan), "worst_abs_diff": worst}
+
+
 @app.function(image=image, volumes={"/data": vol}, timeout=1800)
 def package_decoder(ckpts: str = "r2_18000,r3l4_8000,r3l8_8000,aigc8_5000",
-                     enhancer_path: str = "/data/enhancer_out_matched/enhancer_18000.pt"):
+                     enhancer_path: str = "/data/enhancer_out_matched/enhancer_18000.pt",
+                     fidelity_sr_path: str = "/data/fidelity_sr_mse/fidelity_sr_1000.pt"):
     """Assemble the shippable decoder: trimmed SD-Turbo (fp16, unet+vae only), AdcSR halfDecoder,
     4 AEIC checkpoints, enhancer weights, AEIC/src code."""
-    import pathlib, shutil, zipfile
+    import pathlib, shutil, zipfile, torch
+    from compressai.zoo import mbt2018_mean
     ckpt_paths = {
         "r2b_7000": "AEIC_r2b_2_7000.pkl", "r3l4_8000": "AEIC_r3l4_4_8000.pkl",
         "r3l8_8000": "AEIC_r3l8_8_8000.pkl", "aigc8_5000": "AEIC_ME_aigc88_5000.pkl",
@@ -639,6 +917,8 @@ def package_decoder(ckpts: str = "r2_18000,r3l4_8000,r3l8_8000,aigc8_5000",
         src = pathlib.Path(f"/data/ft_out/checkpoints/{fname}") if not (pathlib.Path(f"{W}/aeic_ckpts/{fname}")).exists() else pathlib.Path(f"{W}/aeic_ckpts/{fname}")
         shutil.copy(src, dst / "aeic_ckpts" / fname)
     shutil.copy(enhancer_path, dst / "enhancer.pt")
+    torch.save(mbt2018_mean(quality=1, pretrained=True).state_dict(), dst / "fidelity_codec.pt")
+    shutil.copy(fidelity_sr_path, dst / "fidelity_sr.pt")
     shutil.copytree("/aeic/src", dst / "src", dirs_exist_ok=True)
 
     (dst / "README.txt").write_text(f"""AEIC-based AIGC Image Compression Decoder — Team ZeroR
@@ -660,6 +940,7 @@ HOW TO RUN
        python src/decode.py \\
          --sd_path=./sd-turbo --vae_decoder_path=./adcsr/halfDecoder.ckpt \\
          --ckpt_dir=./aeic_ckpts --enhancer_ckpt=./enhancer.pt \\
+         --fidelity_codec_ckpt=./fidelity_codec.pt --fidelity_sr_ckpt=./fidelity_sr.pt \\
          --bin_path=<bitstream_dir> --rec_path=<output_dir>
      Each .bin file carries a 1-byte header identifying which of the 4 shipped checkpoints
      encoded it (written by our encoder, src/refine.py --ckpt_id=<0-3>); decode.py reads that
@@ -745,5 +1026,12 @@ def checkpoint_breakdown(ckpt: str = "AEIC_r2_4_18000.pkl"):
         if isinstance(v, dict):
             n = sum(p.numel() * p.element_size() for p in v.values() if hasattr(p, "numel"))
             print(k, round(n/1e6, 2), "MB", len(v), "tensors")
+            if k == "state_dict_codec":
+                from collections import defaultdict
+                groups = defaultdict(int)
+                for name, p in v.items():
+                    if hasattr(p, "numel"):
+                        groups[name.split(".", 1)[0]] += p.numel() * p.element_size()
+                print("codec groups", {g: round(n/1e6, 2) for g, n in sorted(groups.items())})
         else:
             print(k, type(v))

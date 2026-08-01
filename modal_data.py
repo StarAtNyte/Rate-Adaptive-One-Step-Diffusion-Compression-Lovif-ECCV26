@@ -7,6 +7,7 @@ image = modal.Image.debian_slim().pip_install("gdown>=5.2.0").apt_install("unzip
 FILES = {
     "train.zip": "1i7DPC9qlhc9dw8TqnfmCxhVJaPmqw0VA",
     "val.zip": "1ufJyoUM_9ic3YIxICeImNEF1GkfQjCY6",
+    "test.zip": "19GmzZXg97KWYmV1B5j2ks5Wlwqo2Kz3T",
 }
 
 

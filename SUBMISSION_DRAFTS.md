@@ -9,8 +9,10 @@ Body:
 
 > Full challenge name: LoViF 2026 - AIGC Image Compression Challenge
 > Team name: ZeroR
-> Team leader's name and email address: <FILL: name>, alttechone.1@gmail.com
-> Team name and usernames registered on the LoViF 2026 Codabench server: ZeroR / <FILL: codabench username>
+> Team leader's name and email address: Nitiz Khanal, khanalnitij20@gmail.com
+> Alternative email: 077bel025.nitiz@pcampus.edu.np
+> Affiliation: Pulchowk Campus, Lalitpur, Nepal
+> Team name and usernames registered on the LoViF 2026 Codabench server: ZeroR / nitizkhanal
 >
 > Decoder package (4.40 GB zip, exceeds the 4 GB attachment cap, provided as a download link per the
 > submission guidelines): <FILL: upload decoder_package_v17.zip to Drive and paste share link>

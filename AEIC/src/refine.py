@@ -138,6 +138,10 @@ def main():
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--rate_w", type=float, default=20000)
     ap.add_argument("--mse_w", type=float, default=1000)
+    ap.add_argument("--psnr_w", type=float, default=0,
+                    help="weight for the exact differentiable PSNR objective, implemented as "
+                         "10*log10(MSE); 0 preserves the historical fixed-MSE objective")
+    ap.add_argument("--lpips_w", type=float, default=40)
     ap.add_argument("--dists_w", type=float, default=40)
     ap.add_argument("--lora_rank_unet", default=32, type=int)
     ap.add_argument("--enable_xformers_memory_efficient_attention", default=True)
@@ -257,7 +261,12 @@ def main():
             dt = dists_loss(xh01, x01).mean()
             dt_w = args.dists_w * (args.text_dists_w if is_text_iter else 1.0)
             rate_pen = F.relu(bpp - bpp0.detach())
-            loss = args.mse_w * mse + 40 * lp + dt_w * dt + args.rate_w * rate_pen
+            # Minimizing 10*log10(MSE) is exactly equivalent to maximizing PSNR.
+            # Unlike a fixed MSE coefficient, its gradient automatically becomes stronger as
+            # reconstruction error falls, which is important for a fidelity-focused Pareto branch.
+            psnr_loss = 10.0 * torch.log10(mse.clamp_min(1e-8))
+            loss = (args.mse_w * mse + args.psnr_w * psnr_loss
+                    + args.lpips_w * lp + dt_w * dt + args.rate_w * rate_pen)
           if True:
             opt.zero_grad()
             loss.backward()

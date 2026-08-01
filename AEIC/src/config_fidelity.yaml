@@ -1,0 +1,44 @@
+training:
+  # Fidelity-only branch for the LoViF metric's PSNR term.  Initialize from the
+  # existing r3l8 checkpoint, which is already close to the 0.025-bpp target.
+  exp_name: "AEIC_fidelity_"
+  max_train_steps: 6000
+  train_patch_size: 512
+  train_batch_size_total: 8
+
+  train_batch_size_per_gpu: 1
+  gradient_accumulation_steps: 2
+
+  save_num: 10
+  eval_freq: 250
+  max_grad_norm: 0.1
+  dataloader_num_workers: 8
+  checkpointing_steps: 1000
+
+  base:
+    # Preserve approximately the rate/distortion ratio of r3l8 while removing
+    # perceptual and adversarial gradients.  The resulting checkpoint is a new
+    # Pareto candidate, not a replacement until measured on validation.
+    lr: 2e-5
+    lambda_rate: 32.0
+    lambda_l2: 10.0
+    lambda_dists: 0.0
+    lambda_clip: 0.0
+    lambda_adv: 0.0
+    lambda_lpips: 0.0
+
+  stages:
+    - name: "stage_1"
+      end_step: 3500
+
+    - name: "stage_2"
+      end_step: 5000
+      lr: 1e-5
+
+    - name: "stage_3"
+      end_step: 5750
+      lr: 5e-6
+
+    - name: "stage_4"
+      end_step: 1000000000000
+      lr: 1e-6

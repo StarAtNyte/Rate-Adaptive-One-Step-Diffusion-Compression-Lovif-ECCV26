@@ -4,3 +4,20 @@ __pycache__/
 *.pyc
 .env
 nohup.out
+
+# Remote experiment downloads and submission archives
+modal_dl/
+LoViF_2026_Challenge_on_*_Factsheet*.zip
+final_submission_prep/ready_to_send/ZeroR_Final_Submission_*.zip
+final_submission_prep/ready_to_send/*_Factsheet_Source.zip
+
+# Generated factsheet intermediates and previews
+final_submission_prep/preview/
+final_submission_prep/factsheet_extracted.txt
+final_submission_prep/factsheet_source/*.aux
+final_submission_prep/factsheet_source/*.bbl
+final_submission_prep/factsheet_source/*.blg
+final_submission_prep/factsheet_source/*.brf
+final_submission_prep/factsheet_source/*.out
+final_submission_prep/factsheet_source/*.xdv
+final_submission_prep/factsheet_source/AiORestoration_factsheet.pdf

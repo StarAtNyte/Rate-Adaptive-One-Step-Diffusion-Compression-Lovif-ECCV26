@@ -185,3 +185,13 @@ ceiling for this architecture.
 | E74 | 07-18 | Refreeze depth sweep, 8-img screens vs refreeze75@300: (a) refreeze75 @ **500 iters**, (b) refreeze**25** @ 300 | (a) **+0.44/img, 8/8 positive** (old −1.02 outlier now +1.10), bpp +0.0005; (b) +0.12/img | **stale conditioning WAS the depth bottleneck — curve re-opened.** Full 100-img rf500 run launched (pkgset_v7_rf500) + 800-iter screen queued |
 
 | E75 | 07-18 | Full rf500 run (100 imgs) + champ enhancer: raw **111.9969 @ 0.03148** (+0.33 over refreeze300); rf800 subset screen **still +0.24 over rf500** — depth curve still climbing | MILP remix → **v21, submission_v21_rf500.zip**: **111.8314 @ w-bpp 0.024989** (rf500 wins 63/100) | board est **31.8314** (+0.17 over v20). Full rf800 run launched (pkgset_v8_rf800) |
+
+| E76 | 07-31 | Test-set PSNR audit after final board result (27.0224 dB): re-solved the existing 10-candidate pool with PSNR weights 1x/2x/4x and pure PSNR | Existing-pool ceiling is only **27.08 dB** at legal bpp (combined score falls from 31.5276 to 31.4800); remixing cannot reach 30 dB. | A new candidate/codec is required. |
+| E77 | 07-31 | Added exact differentiable PSNR TTO term (`10·log10(MSE)`) plus configurable LPIPS weight; pure-PSNR 300-step/refreeze75 screen on four representative test images, enhancer in loop | Mean **26.0489 dB @ 0.03183 bpp** vs rf500-enh **26.1600 dB @ 0.03172** on the same four. Per-image PSNR deltas: +0.057, −0.562, +0.121, −0.060 dB; perceptual metrics also regress. | Negative. AEIC latent TTO has saturated; 30 dB needs a fidelity-trained base codec, not loss reweighting. |
+## 2026-08-01 — Fidelity codec and residual submission
+
+- Added a real reduced-resolution MBT2018-mean entropy-codec path and trained a 12-block fidelity decoder on 800 real codec reconstructions.
+- Corrected 3k-step MSE model: BPP 0.025724, PSNR 27.3007, MS-SSIM 0.90811, LPIPS 0.35014, DISTS 0.22263. It improves codec PSNR but is not selected once perceptual score is optimized.
+- Rejected an earlier CHG1 selection after decoder parity exposed a source-dependent non-finite fallback; replaced it with decoder-reproducible `nan_to_num` handling.
+- Final valid MILP mix (AEIC + six `res32q4` images): score 111.58296 / projected board 31.58296, PSNR 27.11001, BPP 0.02498965.
+- Submission: `modal_dl/submission_residual_v1.zip`; decoder: `modal_dl/decoder_package_residual_v1.zip` (4.431 GB). Both archives pass CRC validation.
