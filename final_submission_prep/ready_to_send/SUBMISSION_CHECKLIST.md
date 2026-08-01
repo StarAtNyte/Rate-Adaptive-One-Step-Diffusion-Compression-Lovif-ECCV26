@@ -13,7 +13,6 @@
 
 ## Must be completed before sending
 
-- Insert Nitiz Khanal's OpenReview ID in the factsheet, or explicitly write `Not available` if the organizers permit it. Ensure the OpenReview profile includes the submitted contact email.
 - Upload `ZeroR_Final_Submission_31.8999.zip` to a publicly accessible Drive/Dropbox/OneDrive link.
 - Replace the download-link placeholder in both the email and factsheet.
 - Test the download link in an incognito/private browser without logging in.
