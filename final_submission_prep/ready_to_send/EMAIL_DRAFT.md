@@ -31,17 +31,17 @@ LoViF 2026 Codabench registration:
 
 Final Codabench result:
 
-- Final score: 31.8999
-- PSNR: 27.3874 dB
-- MS-SSIM: 0.9178
-- LPIPS: 0.0788
-- DISTS: 0.0381
-- Average BPP: 0.0250
+- Final score: 31.527739
+- PSNR: 27.022356 dB
+- MS-SSIM: 0.917594
+- LPIPS: 0.077794
+- DISTS: 0.038970
+- Average BPP: 0.024946
 - Runtime: 8.5 seconds per image on GPU
 
 Full final submission ZIP:
 
-- [INSERT PUBLIC DOWNLOAD LINK FOR ZeroR_Final_Submission_31.8999.zip]
+- [INSERT PUBLIC DOWNLOAD LINK FOR ZeroR_Final_Submission_31.527739.zip]
 - SHA-256: 66c1f1e1de96c47871c394dd166851d0e770c46c9ce0df615bdc539c8618f0ce
 
 Attached factsheet files:

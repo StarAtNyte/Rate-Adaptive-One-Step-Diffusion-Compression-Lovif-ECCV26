@@ -13,13 +13,12 @@
 
 ## Must be completed before sending
 
-- Upload `ZeroR_Final_Submission_31.8999.zip` to a publicly accessible Drive/Dropbox/OneDrive link.
+- Upload `ZeroR_Final_Submission_31.527739.zip` to a publicly accessible Drive/Dropbox/OneDrive link.
 - Replace the download-link placeholder in both the email and factsheet.
 - Test the download link in an incognito/private browser without logging in.
 - Recompile and repackage the factsheet after replacing its placeholders.
 - Attach both the factsheet PDF and factsheet source ZIP to the email.
 - Do not attach or substitute any post-Code-Submission decoder/model experiment.
-- Confirm whether the authoritative displayed score is `31.8999` or the rounded leaderboard value `31.8899`; update the email/factsheet if needed.
 
 ## Send
 

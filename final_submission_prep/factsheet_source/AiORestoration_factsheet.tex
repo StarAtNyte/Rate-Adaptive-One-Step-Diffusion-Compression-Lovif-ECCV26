@@ -16,7 +16,7 @@
 \maketitle
 
 \begin{abstract}
-This factsheet documents our final entry to the LoViF 2026 AIGC Image Compression Challenge. The system combines a learned entropy model with a one-step diffusion reconstruction prior, four rate-specialized codec checkpoints, encoder-side latent refinement, and a fixed lightweight decoder-side restoration network. A per-image rate allocation step chooses among valid entropy-coded candidates while respecting the global 0.025 bits-per-pixel (BPP) constraint. The submitted decoder is source-independent: it reconstructs an image using only its bitstream, the submitted checkpoints, and fixed pretrained components. The final archive corresponds to the team's Codabench final-test entry with reported score 31.8999.
+This factsheet documents our final entry to the LoViF 2026 AIGC Image Compression Challenge. The system combines a learned entropy model with a one-step diffusion reconstruction prior, four rate-specialized codec checkpoints, encoder-side latent refinement, and a fixed lightweight decoder-side restoration network. A per-image rate allocation step chooses among valid entropy-coded candidates while respecting the global 0.025 bits-per-pixel (BPP) constraint. The submitted decoder is source-independent: it reconstructs an image using only its bitstream, the submitted checkpoints, and fixed pretrained components. The final archive corresponds to the team's Codabench final-test entry with organizer-recalculated score 31.527739.
 \end{abstract}
 
 \section{Introduction}
@@ -42,7 +42,7 @@ Team website & Not applicable \\
 Source/executable & \textbf{[insert submitted-decoder link]} \\
 Results/bitstreams & \textbf{[insert final ZIP link]} \\
 Final result archive & \texttt{submission\_test.zip} \\
-Reported final score & 31.8999 \\
+Official final score & 31.527739 \\
 \bottomrule
 \end{tabular}
 \caption{Team and final-entry identification. Bracketed identity fields must be confirmed before emailing the organizers.}
@@ -128,17 +128,17 @@ where lower LPIPS and DISTS are better and higher PSNR and MS-SSIM are better. T
 \toprule
 Quantity & Final test entry \\
 \midrule
-Final score & 31.8999 (team-confirmed) \\
-PSNR & 27.3874 dB \\
-MS-SSIM & 0.9178 \\
-LPIPS & 0.0788 \\
-DISTS & 0.0381 \\
-Average BPP & 0.0250 \\
+Final score & 31.527739 \\
+PSNR & 27.022356 dB \\
+MS-SSIM & 0.917594 \\
+LPIPS & 0.077794 \\
+DISTS & 0.038970 \\
+Average BPP & 0.024946 \\
 Reported runtime & 8.5 s/image \\
 Execution device & GPU \\
 \bottomrule
 \end{tabular}
-\caption{Final-test metrics supplied from the team's final leaderboard entry. The organizer's archived evaluation is authoritative if displayed rounding differs.}
+\caption{Official organizer-recalculated final-test metrics announced on August 4, 2026.}
 \label{tab:results}
 \end{table}
 
