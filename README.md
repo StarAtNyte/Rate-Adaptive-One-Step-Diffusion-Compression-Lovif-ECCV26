@@ -12,11 +12,6 @@ combines a shallow learned codec with one-step diffusion restoration.
 - [`paper/`](paper/) —
   LaTeX source, bibliography, figures, and the final paper PDF.
 
-The challenge submission archive, private experiment logs, deployment scripts,
-model checkpoints, bitstreams, and datasets are intentionally not included.
-They are either too large, governed by separate terms, or specific to the
-organizer's evaluation environment.
-
 ## Reproduction
 
 The AEIC subproject documents its environment, data preparation, external model
