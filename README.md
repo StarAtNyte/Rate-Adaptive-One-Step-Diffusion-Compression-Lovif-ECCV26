@@ -9,7 +9,7 @@ combines a shallow learned codec with one-step diffusion restoration.
 
 - [`AEIC/`](AEIC/) — the AEIC codec and training/inference utilities used by the
   compression pipeline.
-- [`final_submission_prep/paper_source/`](final_submission_prep/paper_source/) —
+- [`paper/`](paper/) —
   LaTeX source, bibliography, figures, and the final paper PDF.
 
 The challenge submission archive, private experiment logs, deployment scripts,
@@ -24,11 +24,6 @@ downloads, and inference commands in [`AEIC/README.md`](AEIC/README.md). A full
 reproduction requires those external datasets/checkpoints and a CUDA-capable
 PyTorch environment; this repository does not claim one-command reproduction of
 the submitted challenge archive.
-
-## Paper
-
-Build the paper from [`AiORestoration_paper.tex`](final_submission_prep/paper_source/AiORestoration_paper.tex)
-using the commands in [`BUILD.md`](final_submission_prep/paper_source/BUILD.md).
 
 ## License
 

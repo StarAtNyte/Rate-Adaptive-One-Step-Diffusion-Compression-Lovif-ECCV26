@@ -56,14 +56,14 @@ final_submission_prep/reference/
 final_submission_prep/factsheet_extracted.txt
 
 # TeX build intermediates (retain source, figures, and final PDF)
-final_submission_prep/paper_source/*.aux
-final_submission_prep/paper_source/*.bbl
-final_submission_prep/paper_source/*.blg
-final_submission_prep/paper_source/*.log
-final_submission_prep/paper_source/*.out
-final_submission_prep/paper_source/*.toc
-final_submission_prep/paper_source/AiORestoration_paper.pdf
-final_submission_prep/paper_source/eccv_kit/
+paper/*.aux
+paper/*.bbl
+paper/*.blg
+paper/*.log
+paper/*.out
+paper/*.toc
+paper/AiORestoration_paper.pdf
+paper/eccv_kit/
 
 # Editor and OS metadata
 .DS_Store
