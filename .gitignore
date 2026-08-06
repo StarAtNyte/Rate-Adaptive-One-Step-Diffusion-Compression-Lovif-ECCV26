@@ -5,6 +5,34 @@ __pycache__/
 .env
 nohup.out
 
+# Local agent/tool state
+.agents/
+skills-lock.json
+
+# Python and build products
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+
+# Local credentials and environment files
+.env.*
+!.env.example
+
+# Experiment outputs, logs, and planning notes
+*.log
+*.out
+plans/
+plan_*.json
+LOGS.md
+STRATEGY.md
+SUBMISSION_DRAFTS.md
+details.md
+modal_*.py
+mix_and_pack.py
+OSCAR/
+OneDC_code/
+
 # Remote experiment downloads and submission archives
 modal_dl/
 LoViF_2026_Challenge_on_*_Factsheet*.zip
@@ -20,5 +48,25 @@ final_submission_prep/factsheet_source/*.bbl
 final_submission_prep/factsheet_source/*.blg
 final_submission_prep/factsheet_source/*.brf
 final_submission_prep/factsheet_source/*.out
+
+# Private challenge submission and factsheet working files
+final_submission_prep/ready_to_send/
+final_submission_prep/factsheet_source/
+final_submission_prep/reference/
+final_submission_prep/factsheet_extracted.txt
+
+# TeX build intermediates (retain source, figures, and final PDF)
+final_submission_prep/paper_source/*.aux
+final_submission_prep/paper_source/*.bbl
+final_submission_prep/paper_source/*.blg
+final_submission_prep/paper_source/*.log
+final_submission_prep/paper_source/*.out
+final_submission_prep/paper_source/*.toc
+final_submission_prep/paper_source/AiORestoration_paper.pdf
+final_submission_prep/paper_source/eccv_kit/
+
+# Editor and OS metadata
+.DS_Store
+*.swp
 final_submission_prep/factsheet_source/*.xdv
 final_submission_prep/factsheet_source/AiORestoration_factsheet.pdf
