@@ -1,3 +1,9 @@
+> **Role in this repository:** This directory contains the AEIC backbone used and adapted for
+> the AIGC compression challenge submission. The challenge-specific pipeline, fine-tuning,
+> restoration, test-time optimization, bitstream packaging, and rate allocation are documented
+> in the repository root and [`paper/`](../paper/). AEIC remains attributed to its original
+> authors; see [`LICENSE`](LICENSE).
+
 
 <div align="center">
 
