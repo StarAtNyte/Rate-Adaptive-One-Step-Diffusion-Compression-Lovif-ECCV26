@@ -1,4 +1,4 @@
-# Rate-Adaptive One-Step Diffusion Compression
+# Rate-Adaptive One-Step Diffusion Compression for AIGC Images (Lovif, ECCV 2026)
 
 This repository contains the public implementation and paper source for our
 challenge submission on learned compression of AI-generated images. The method
